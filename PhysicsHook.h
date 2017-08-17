@@ -17,11 +17,37 @@ public:
         killSimThread();        
     }
 
+    /*
+     * Runs once when the simulation is initialized, and again each time the user resets the simulation.
+     */
     virtual void initSimulation() = 0;
+
+    /*
+     * Takes one simulation "step." You can do whatever you want here, but the granularity of your computation should 
+     * be small enough that the user can view/pause/kill the simulation at interactive rates.
+     * This method *must* be thread-safe with respect to renderRenderGeometry() (easiest is to not touch any rendering
+     * data structures at all).
+     */
     virtual bool simulateOneStep() = 0;
+
+    /*
+     * Update the rendering data structures here. This method will be called in alternation with simulateOneStep().
+     * This method blocks rendering in the viewer, so do *not* do extensive computation here (leave it to 
+     * simulateOneStep()).
+     */
     virtual void updateRenderGeometry() = 0;
+
+    /*
+     * Perform any actual rendering here. This method *must* be thread-safe with respect to simulateOneStep().
+     * This method runs in the same thread as the viewer and blocks user IO, so there really should not be any
+     * extensive computation here or the UI will lag/become unresponsive (the whole reason the simulation itself
+     * is in its own thread.)
+     */
     virtual void renderRenderGeometry(igl::viewer::Viewer &viewer) = 0;
 
+    /*
+     * Runs the simulation, if it has been paused (or never started).
+     */
     void run()
     {
         status_mutex.lock();
@@ -29,6 +55,9 @@ public:
         status_mutex.unlock();
     }
 
+    /*
+     * Resets the simulation (and leaves it in a paused state; call run() to start it).
+     */
     void reset()
     {
         killSimThread();
@@ -39,6 +68,10 @@ public:
         sim_thread = new std::thread(&PhysicsHook::runSimThread, this);
     }
 
+    /*
+     * Pause a running simulation. The simulation will pause at the end of its current "step"; this method will not
+     * interrupt simulateOneStep mid-processing.
+     */
     void pause()
     {
         status_mutex.lock();
