@@ -18,6 +18,11 @@ public:
     }
 
     /*
+     * Runs once when the program starts; can be used to add GUI elements for simulation parameters, etc.
+     */
+    virtual void initGUI(igl::viewer::Viewer &viewer) = 0;
+
+    /*
      * Runs once when the simulation is initialized, and again each time the user resets the simulation.
      */
     virtual void initSimulation() = 0;

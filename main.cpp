@@ -47,6 +47,7 @@ bool initGUI(igl::viewer::Viewer &viewer)
 {
     viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
     viewer.ngui->addButton("Reset Sim", resetSimulation);
+    hook->initGUI(viewer);
     viewer.screen->performLayout();
     return false;
 }

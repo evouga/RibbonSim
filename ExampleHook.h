@@ -5,6 +5,11 @@ class ExampleHook : public PhysicsHook
 public:
     ExampleHook() : PhysicsHook() {}
 
+    virtual void initGUI(igl::viewer::Viewer &viewer)
+    {
+
+    }
+
     virtual void initSimulation()
     {
         origQ.resize(4, 3);
