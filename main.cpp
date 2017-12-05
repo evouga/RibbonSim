@@ -1,7 +1,7 @@
 #include <igl/viewer/Viewer.h>
 #include <thread>
 #include "PhysicsHook.h"
-#include "ExampleHook.h"
+#include "RodsHook.h"
 
 static PhysicsHook *hook = NULL;
 
@@ -47,8 +47,9 @@ bool initGUI(igl::viewer::Viewer &viewer)
 {
     viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
     viewer.ngui->addButton("Reset Sim", resetSimulation);
-    hook->initGUI(viewer);
+    hook->initGUI(viewer);    
     viewer.screen->performLayout();
+    hook->reset();
     return false;
 }
 
@@ -56,8 +57,7 @@ int main(int argc, char *argv[])
 {
   igl::viewer::Viewer viewer;
 
-  hook = new ExampleHook();
-  hook->reset();
+  hook = new RodsHook();
 
   viewer.data.set_face_based(true);
   viewer.core.is_animating = true;
