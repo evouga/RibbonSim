@@ -1,6 +1,7 @@
 #include "RodEnergy.h"
 #include <Eigen/Geometry>
 #include <cassert>
+#include <iostream>
 
 double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2)
 {
@@ -10,7 +11,7 @@ double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2)
 void dAngle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, Eigen::Vector3d &dv1, Eigen::Vector3d &dv2)
 {
     Eigen::Vector3d n = v1.cross(v2);
-    if (n.norm() < 1e-6)
+    if (n.norm() == 0.0)
     {
         dv1.setZero();
         dv2.setZero();
@@ -75,9 +76,10 @@ static double rodTwistingEnergy(const Eigen::MatrixXd &centerline, const Eigen::
         energy += params.width * params.thickness * params.thickness * params.thickness * params.ktwist * tau*tau*restlens[i + 1];
         Eigen::Vector3d d1, d2;
         dAngle(B1, B2, d1, d2);
+
         Eigen::Vector3d dv1 = v2.cross(d1);
         Eigen::Vector3d dv2 = -v1.cross(d1) + v3.cross(d2);
-        Eigen::Vector3d dv3 = -v2.cross(d2);
+        Eigen::Vector3d dv3 = -v2.cross(d2);        
         dE.row(i) -= params.width * params.thickness * params.thickness * params.thickness * params.ktwist * 2.0 * tau * dv1.transpose();
         dE.row(i+1) += params.width * params.thickness * params.thickness * params.thickness * params.ktwist * 2.0 * tau * dv1.transpose() - params.width * params.thickness * params.thickness * params.thickness * params.ktwist * 2.0 * tau * dv2.transpose();
         dE.row(i+2) += params.width * params.thickness * params.thickness * params.thickness * params.ktwist * 2.0 * tau * dv2.transpose() - params.width * params.thickness * params.thickness * params.thickness * params.ktwist * 2.0 * tau * dv3.transpose();

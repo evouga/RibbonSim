@@ -2,13 +2,13 @@
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
-    params.kbending = 1.0;
-    params.kstretching = 1.0;
-    params.ktwist = 1.0 / 3.0;
+    params.kbending = 1e8;
+    params.kstretching = 1e8;
+    params.ktwist = 1e8 / 3.0;
     params.rho = 1.0;
     params.thickness = 1e-4;
     params.width = 0.01;
-    dt = 1e-3;
+    dt = 1e-6;
 
     viewer.ngui->addGroup("Rod Parameters");
     viewer.ngui->addVariable("Thickness", params.thickness);

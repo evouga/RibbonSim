@@ -31,6 +31,22 @@ public:
 
         masses(restlens, M, params);
         createVisualizationMesh();
+
+        /*for (int i = 0; i < nverts; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                Eigen::MatrixXd cp = centerline;
+                cp(i, j) += 1e-7;
+                Eigen::MatrixXd dE;
+                double energy = rodEnergy(centerline, restlens, params, dE);
+                double newenergy = rodEnergy(cp, restlens, params, dE);
+                double findiff = (newenergy - energy) / 1e-7;
+                std::cout << findiff << " " << dE(i, j) << std::endl;
+            }
+        }
+        
+        while (true);*/
     }
 
     virtual void updateRenderGeometry()
