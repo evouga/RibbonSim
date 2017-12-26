@@ -2,51 +2,6 @@
 #include <Eigen/Geometry>
 #include <iostream>
 
-Rod::Rod(const RodState &startState, const RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
-{
-    int nverts = startState.centerline.rows();
-    int nsegs = isClosed ? nverts : nverts - 1;
-    assert(startState.centerlineVel.rows() == nverts);
-    assert(startState.directors.rows() == nsegs);
-    assert(startState.directorAngVel.size() == nsegs);
-    assert(startState.thetas.size() == nsegs);
-
-    curState = startState;
-    initializeRestQuantities();
-}
-
-void Rod::initializeRestQuantities()
-{
-    int nverts = startState.centerline.rows();
-    int nsegs = isClosed() ? nverts : nverts - 1;
-    restlens.resize(nsegs);
-    for (int i = 0; i < nsegs; i++)
-    {
-        Eigen::Vector3d v1 = startState.centerline.row(i).transpose();
-        Eigen::Vector3d v2 = startState.centerline.row((i+1)%nverts).transpose();
-        double len = (v1 - v2).norm();
-        restlens[i] = len;
-    }
-
-    masses.resize(nverts);
-    masses.setZero();
-    for (int i = 0; i < nsegs; i++)
-    {
-        double len = restlens[i];
-        double totmass = params.width*params.thickness*len*params.rho;
-        masses[i] += totmass / 2.0;
-        masses[(i + 1)%nverts] += totmass / 2.0;
-    }
-
-    momInertia.resize(nsegs);
-    for (int i = 0; i < nsegs; i++)
-    {
-        double len = restlens[i];
-        double mass = params.width*params.thickness*len*params.rho;
-        momInertia[i] = mass / 12.0 * (params.width*params.width + params.thickness*params.thickness);
-    }
-}
-
 double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE)
 {
     int nverts = state.centerline.rows();
@@ -58,7 +13,7 @@ double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *
         Eigen::Vector3d v2 = state.centerline.row((i+1)%nverts).transpose();
         double len = (v1 - v2).norm();
         double restlen = rod.restlens[i];
-        double factor = 0.5 * rod.params.kstretching * rod.params.width * rod.params.thickness / restlen;
+        double factor = 0.5 * rod.params.kstretching * rod.widths[i] * rod.params.thickness / restlen;
         double segenergy = factor * (len - restlen)*(len - restlen);
         energy += segenergy;
         if (dE)
@@ -98,8 +53,9 @@ double bendingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE,
         double k1 = 0.5*(d21 + d22).dot(kb);
         double k2 = 0.5*(d11 + d12).dot(kb);
         double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
-        double factor1 = 0.5*rod.params.kbending*rod.params.width*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
-        double factor2 = 0.5*rod.params.kbending*rod.params.width*rod.params.width*rod.params.width*rod.params.thickness / len;
+        double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+        double factor1 = 0.5*rod.params.kbending*width*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
+        double factor2 = 0.5*rod.params.kbending*width*width*width*rod.params.thickness / len;
         double vertenergy = factor1*k1*k1 + factor2*k2*k2;
         energy += vertenergy;
         if (dE)
@@ -164,7 +120,8 @@ double twistingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE
         Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, v2 - v1);
         double theta = angle(d1t, d2, t12);
         double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
-        double factor = 0.5*rod.params.ktwist*rod.params.width*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
+        double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+        double factor = 0.5*rod.params.ktwist*width*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
         energy += factor*theta*theta;
         if (dE)
         {
