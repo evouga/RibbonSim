@@ -13,37 +13,36 @@ public:
     {
         RodState rs;
         int nverts = 100;
+        double PI = 3.1415926525898;
         rs.centerline.resize(nverts, 3);
         rs.ceterlineVel.resize(nverts, 3);
         rs.ceterlineVel.setZero();
 
         for (int i = 0; i < nverts; i++)
         {
-            double r = 0.2 + 0.1 * sin(double(i) / 10);
-            rs.centerline(i, 0) = r*cos(double(i) / 4.0);
-            rs.centerline(i, 1) = r*sin(double(i) / 4.0);
-            rs.centerline(i, 2) = double(i) / nverts;            
+            double r = 0.2 +0.1 * sin(2.0*PI*double(i) / 50);
+            rs.centerline(i, 0) = r*cos(2.0*PI*double(i) / 100.0);
+            rs.centerline(i, 1) = r*sin(2.0*PI*double(i) / 100.0);
+            rs.centerline(i, 2) = 0; //double(i) / nverts;            
         }
         
         
-        rs.directors.resize(nverts-1, 3);
+        rs.directors.resize(nverts, 3);
         rs.directors.setZero();
-        rs.directorAngVel.resize(nverts - 1);
+        rs.directorAngVel.resize(nverts);
         rs.directorAngVel.setZero();
 
-        rs.thetas.resize(nverts - 1);
+        rs.thetas.resize(nverts);
         rs.thetas.setZero();
-
-        for (int i = 1; i < nverts - 1; i++)
+        int nsegs = nverts;
+        for (int i = 0; i < nverts; i++)
         {
-            Eigen::Vector3d v0 = rs.centerline.row(i - 1);
             Eigen::Vector3d v1 = rs.centerline.row(i);
-            Eigen::Vector3d v2 = rs.centerline.row(i + 1);
-            Eigen::Vector3d d = (v1 - v0).cross(v2 - v1);
-            rs.directors.row(i - 1) += (v1-v0).cross(d);
-            rs.directors.row(i) += (v2-v1).cross(d);
+            Eigen::Vector3d v2 = rs.centerline.row((i + 1) % nverts);
+            Eigen::Vector3d d = Eigen::Vector3d(0, 0, 1).cross(v2 - v1);
+            rs.directors.row(i) = d;
         }
-        for (int i = 0; i < nverts - 1; i++)
+        for (int i = 0; i < nsegs; i++)
         {
             rs.directors.row(i) /= rs.directors.row(i).norm();
         }
@@ -51,7 +50,7 @@ public:
         
         if (rod)
             delete rod;
-        rod = new Rod(rs, params);
+        rod = new Rod(rs, params, true);
         createVisualizationMesh();
         Eigen::MatrixXd dE;
         rodEnergy(*rod, rod->curState, &dE, NULL);

@@ -42,12 +42,13 @@ void RodsHook::showForces(const Eigen::MatrixXd &dE)
 void RodsHook::createVisualizationMesh()
 {
     int nverts = rod->curState.centerline.rows();
-    Eigen::MatrixXd N(nverts-1, 3);
-    Eigen::MatrixXd B(nverts-1, 3);
-    for (int i = 0; i < nverts - 1; i++)
+    int nsegs = rod->isClosed() ? nverts : nverts - 1;
+    Eigen::MatrixXd N(nsegs, 3);
+    Eigen::MatrixXd B(nsegs, 3);
+    for (int i = 0; i < nsegs; i++)
     {
         Eigen::Vector3d v0 = rod->curState.centerline.row(i);
-        Eigen::Vector3d v1 = rod->curState.centerline.row(i+1);
+        Eigen::Vector3d v1 = rod->curState.centerline.row((i + 1) % nverts);
         Eigen::Vector3d e = v1 - v0;
         e /= e.norm();
         Eigen::Vector3d d1 = rod->curState.directors.row(i);
@@ -57,13 +58,12 @@ void RodsHook::createVisualizationMesh()
         B.row(i) = -d1*sin(theta) + d2*cos(theta);
     }
     
-    int nedges = nverts - 1;
-    Q.resize(8 * nedges, 3);
-    F.resize(8 * nedges, 3);
-    for (int i = 0; i < nedges; i++)
+    Q.resize(8 * nsegs, 3);
+    F.resize(8 * nsegs, 3);
+    for (int i = 0; i < nsegs; i++)
     {
         Eigen::Vector3d v0 = rod->curState.centerline.row(i);
-        Eigen::Vector3d v1 = rod->curState.centerline.row(i+1);
+        Eigen::Vector3d v1 = rod->curState.centerline.row((i + 1) % nverts);
         Eigen::Vector3d T = v1 - v0;
         T /= T.norm();
         Q.row(8 * i + 0) = (v0.transpose() + params.thickness / 2.0 * N.row(i) - params.width / 2.0 * B.row(i));
@@ -91,12 +91,13 @@ int iter = 0;
 bool RodsHook::simulateOneStep()
 {
     int nverts = rod->curState.centerline.rows();
-    for (int i = 0; i < nverts-1; i++)
+    int nsegs = rod->isClosed() ? nverts : nverts - 1;
+    for (int i = 0; i < nsegs; i++)
     {
         Eigen::Vector3d oldv1 = rod->curState.centerline.row(i);
-        Eigen::Vector3d oldv2 = rod->curState.centerline.row(i+1);
+        Eigen::Vector3d oldv2 = rod->curState.centerline.row((i + 1) % nverts);
         Eigen::Vector3d v1 = oldv1 + dt*rod->curState.ceterlineVel.row(i).transpose();
-        Eigen::Vector3d v2 = oldv2 + dt*rod->curState.ceterlineVel.row(i+1).transpose();
+        Eigen::Vector3d v2 = oldv2 + dt*rod->curState.ceterlineVel.row((i + 1) % nverts).transpose();
 
         rod->curState.directors.row(i) = parallelTransport(rod->curState.directors.row(i), oldv2 - oldv1, v2 - v1);
     }
@@ -114,7 +115,7 @@ bool RodsHook::simulateOneStep()
     {
         dE.row(i) /= rod->masses[i];
     }
-    for (int i = 0; i < nverts - 1; i++)
+    for (int i = 0; i < nsegs; i++)
     {
         dtheta[i] /= rod->momInertia[i];
     }

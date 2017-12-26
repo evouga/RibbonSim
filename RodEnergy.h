@@ -25,8 +25,9 @@ struct RodState
 class Rod
 {
 public:
-    Rod(const RodState &startState, const RodParams &params);
+    Rod(const RodState &startState, const RodParams &params, bool isClosed);
 
+    bool isClosed() const { return isClosed_; }
     RodState curState;
     RodState startState;
 
@@ -36,6 +37,8 @@ public:
     RodParams params;
 
 private:
+    bool isClosed_;
+        
     void initializeRestQuantities();
 };
 
