@@ -9,10 +9,16 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addVariable("Time Step", dt);
     viewer.ngui->addVariable("Damping Factor", damp);
     
+    viewer.ngui->addGroup("Sim Status");
+    viewer.ngui->addVariable("Iteration", iter, false);
+    viewer.ngui->addVariable("Force Residual", forceResidual, false);
 }
 
 void RodsHook::initSimulation()
 {
+    iter = 0;
+    forceResidual = 0;
+
     RodParams params;
     double Y = 1e8;
     params.kbending = Y;
@@ -134,7 +140,6 @@ void RodsHook::createVisualizationMesh()
     config->createVisualizationMesh(Q, F);
 }
 
-int iter = 0;
 bool RodsHook::simulateOneStep()
 {
     int nrods = config->numRods();
@@ -158,6 +163,8 @@ bool RodsHook::simulateOneStep()
 
     createVisualizationMesh();    
 
+    double newresid = 0;
+
     // update velocities
     for (int rod = 0; rod < nrods; rod++)
     {
@@ -169,10 +176,12 @@ bool RodsHook::simulateOneStep()
         int nsegs = config->rods[rod]->numSegments();
         for (int i = 0; i < nverts; i++)
         {
-            dE.row(i) /= config->rods[rod]->masses[i];
+            newresid += dE.row(i).squaredNorm() / config->rods[rod]->masses[i];
+            dE.row(i) /= config->rods[rod]->masses[i];            
         }
         for (int i = 0; i < nsegs; i++)
         {
+            newresid += dtheta[i]*dtheta[i] / config->rods[rod]->momInertia[i];
             dtheta[i] /= config->rods[rod]->momInertia[i];
         }
 
@@ -183,6 +192,7 @@ bool RodsHook::simulateOneStep()
         config->rods[rod]->curState.centerlineVel *= dampfactor;
         config->rods[rod]->curState.directorAngVel *= dampfactor;        
     }
+    forceResidual = newresid;
     iter++;
     
     /*if (iter == 100)

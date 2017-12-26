@@ -4,7 +4,7 @@
 class RodsHook : public PhysicsHook
 {
 public:
-    RodsHook() : PhysicsHook(), dirty(true), config(NULL) {
+    RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), dirty(true), config(NULL) {
     }
 
     virtual void initGUI(igl::viewer::Viewer &viewer);
@@ -39,6 +39,9 @@ private:
 
     double dt;
     double damp;
+
+    double iter;
+    double forceResidual;
     
     RodConfig *config;
 
