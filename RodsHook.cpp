@@ -10,6 +10,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     params.thickness = 1e-4;
     params.width = .01;
     dt = 1e-7;
+    damp = 100;
 
     viewer.ngui->addGroup("Rod Parameters");
     viewer.ngui->addVariable("Thickness", params.thickness);
@@ -20,6 +21,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
+    viewer.ngui->addVariable("Damping Factor", damp);
     
 }
 
@@ -96,12 +98,12 @@ bool RodsHook::simulateOneStep()
     {
         Eigen::Vector3d oldv1 = rod->curState.centerline.row(i);
         Eigen::Vector3d oldv2 = rod->curState.centerline.row((i + 1) % nverts);
-        Eigen::Vector3d v1 = oldv1 + dt*rod->curState.ceterlineVel.row(i).transpose();
-        Eigen::Vector3d v2 = oldv2 + dt*rod->curState.ceterlineVel.row((i + 1) % nverts).transpose();
+        Eigen::Vector3d v1 = oldv1 + dt*rod->curState.centerlineVel.row(i).transpose();
+        Eigen::Vector3d v2 = oldv2 + dt*rod->curState.centerlineVel.row((i + 1) % nverts).transpose();
 
         rod->curState.directors.row(i) = parallelTransport(rod->curState.directors.row(i), oldv2 - oldv1, v2 - v1);
     }
-    rod->curState.centerline += dt*rod->curState.ceterlineVel;
+    rod->curState.centerline += dt*rod->curState.centerlineVel;
     rod->curState.thetas += dt*rod->curState.directorAngVel;
 
     Eigen::MatrixXd dE;
@@ -120,8 +122,12 @@ bool RodsHook::simulateOneStep()
         dtheta[i] /= rod->momInertia[i];
     }
         
-    rod->curState.ceterlineVel -= dt*dE;
+    rod->curState.centerlineVel -= dt*dE;
     rod->curState.directorAngVel -= dt*dtheta;
+
+    double dampfactor = exp(-dt*damp);
+    rod->curState.centerlineVel *= dampfactor;
+    rod->curState.directorAngVel *= dampfactor;
     
     std::cout << "Energy: " << energy << std::endl;
     iter++;

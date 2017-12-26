@@ -6,7 +6,7 @@ Rod::Rod(const RodState &startState, const RodParams &params, bool isClosed) : s
 {
     int nverts = startState.centerline.rows();
     int nsegs = isClosed ? nverts : nverts - 1;
-    assert(startState.ceterlineVel.rows() == nverts);
+    assert(startState.centerlineVel.rows() == nverts);
     assert(startState.directors.rows() == nsegs);
     assert(startState.directorAngVel.size() == nsegs);
     assert(startState.thetas.size() == nsegs);

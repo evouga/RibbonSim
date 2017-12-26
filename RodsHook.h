@@ -15,8 +15,8 @@ public:
         int nverts = 100;
         double PI = 3.1415926525898;
         rs.centerline.resize(nverts, 3);
-        rs.ceterlineVel.resize(nverts, 3);
-        rs.ceterlineVel.setZero();
+        rs.centerlineVel.resize(nverts, 3);
+        rs.centerlineVel.setZero();
 
         for (int i = 0; i < nverts; i++)
         {
@@ -108,6 +108,7 @@ private:
     void showForces(const Eigen::MatrixXd &dE);
 
     double dt;
+    double damp;
     RodParams params;
     Rod *rod;
 

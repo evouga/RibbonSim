@@ -18,7 +18,7 @@ struct RodState
     Eigen::MatrixXd centerline;
     Eigen::MatrixXd directors;
     Eigen::VectorXd thetas;
-    Eigen::MatrixXd ceterlineVel;
+    Eigen::MatrixXd centerlineVel;
     Eigen::VectorXd directorAngVel;
 };
 
