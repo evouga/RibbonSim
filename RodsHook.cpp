@@ -37,9 +37,9 @@ void RodsHook::initSimulation()
     {
         Eigen::Matrix3d rot;
         double angle = PI*double(rod) / double(nrods);
-        rot << cos(angle), 0, sin(angle),
-            0, 1.0, 0,
-            -sin(angle), 0, cos(angle);
+        rot << 1.0, 0.0, 0.0,
+            0.0, cos(angle), sin(angle),
+            0.0, -sin(angle), cos(angle);
 
         RodState rs;
         int nverts = 100;
@@ -50,8 +50,8 @@ void RodsHook::initSimulation()
         for (int i = 0; i < nverts; i++)
         {
             double r = 0.2 + 0.1 * sin(2.0*PI*double(i) / 50);
-            rs.centerline(i, 0) = r*cos(2.0*PI*double(i) / 100.0);
-            rs.centerline(i, 1) = r*sin(2.0*PI*double(i) / 100.0);
+            rs.centerline(i, 0) = r*cos(2.0*PI*(double(i)-0.5) / 100.0);
+            rs.centerline(i, 1) = r*sin(2.0*PI*(double(i)-0.5) / 100.0);
             rs.centerline(i, 2) = 0; //double(i) / nverts;            
             rs.centerline.row(i) = rs.centerline.row(i)*rot.transpose();
         }
@@ -84,6 +84,22 @@ void RodsHook::initSimulation()
 
         Rod *therod = new Rod(rs, widths, params, true);
         config->addRod(therod);
+    }
+
+    for (int i = 0; i < nrods; i++)
+    {
+        for (int j = i + 1; j < nrods; j++)
+        {
+            Constraint c;
+            c.rod1 = i;
+            c.rod2 = j;
+            c.seg1 = 0;
+            c.seg2 = 0;
+            c.bary1 = 0.5;
+            c.bary2 = 0.5;
+            c.stiffness = 100;
+            config->addConstraint(c);
+        }
     }
 
     createVisualizationMesh();
@@ -165,12 +181,17 @@ bool RodsHook::simulateOneStep()
 
     double newresid = 0;
 
+    std::vector<Eigen::MatrixXd> constraintdE;
+    constraintEnergy(*config, &constraintdE);
+
     // update velocities
     for (int rod = 0; rod < nrods; rod++)
     {
         Eigen::MatrixXd dE;
         Eigen::VectorXd dtheta;
         double energy = rodEnergy(*config->rods[rod], config->rods[rod]->curState, &dE, &dtheta);
+
+        dE += constraintdE[rod];
 
         int nverts = config->rods[rod]->numVertices();
         int nsegs = config->rods[rod]->numSegments();

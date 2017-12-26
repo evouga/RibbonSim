@@ -66,6 +66,17 @@ void RodConfig::addRod(Rod *rod)
     rods.push_back(rod);
 }
 
+void RodConfig::addConstraint(Constraint c)
+{
+    assert(c.rod1 >= 0 && c.rod1 < numRods());
+    assert(c.rod2 >= 0 && c.rod2 < numRods());
+    assert(c.seg1 >= 0 && c.seg1 < rods[c.rod1]->numSegments());
+    assert(c.seg2 >= 0 && c.seg2 < rods[c.rod2]->numSegments());
+    assert(c.bary1 >= 0.0 && c.bary1 <= 1.0);
+    assert(c.bary2 >= 0.0 && c.bary2 <= 1.0);
+    constraints.push_back(c);
+}
+
 void RodConfig::reset()
 {
     int nrods = (int)rods.size();

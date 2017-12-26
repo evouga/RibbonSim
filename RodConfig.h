@@ -45,17 +45,27 @@ private:
     void initializeRestQuantities();
 };
 
+struct Constraint
+{
+    int rod1, rod2;
+    int seg1, seg2;
+    double bary1, bary2;
+    double stiffness;
+};
+
 class RodConfig
 {
 public:
     ~RodConfig();
 
     void addRod(Rod *rod);
+    void addConstraint(Constraint c);
     int numRods() const { return (int)rods.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
 
     std::vector<Rod *> rods;
+    std::vector<Constraint> constraints;
 };
 
 #endif

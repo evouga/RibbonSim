@@ -171,3 +171,43 @@ Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3
     Eigen::Vector3d p2 = n.cross(t2);
     return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
 }
+
+double constraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs)
+{
+    int nrods = config.numRods();
+    if (dEs)
+    {
+        dEs->resize(nrods);
+        for (int i = 0; i < nrods; i++)
+        {
+            int nverts = config.rods[i]->numVertices();
+            (*dEs)[i].resize(nverts, 3);
+            (*dEs)[i].setZero();
+        }
+    }
+    int nconstraints = (int)config.constraints.size();
+    double totenergy = 0;
+    for (int i = 0; i < nconstraints; i++)
+    {
+        const Constraint &c = config.constraints[i];
+        int nverts1 = config.rods[c.rod1]->numVertices();
+        Eigen::Vector3d p1 = config.rods[c.rod1]->curState.centerline.row(c.seg1);
+        Eigen::Vector3d p2 = config.rods[c.rod1]->curState.centerline.row((c.seg1+1)%nverts1);
+        int nverts2 = config.rods[c.rod2]->numVertices();
+        Eigen::Vector3d q1 = config.rods[c.rod2]->curState.centerline.row(c.seg2);
+        Eigen::Vector3d q2 = config.rods[c.rod2]->curState.centerline.row((c.seg2+1)%nverts2);
+
+        Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
+        Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
+        double energy = 0.5*c.stiffness*(pt1 - pt2).dot(pt1 - pt2);
+        totenergy += energy;
+
+        if (dEs)
+        {
+            (*dEs)[c.rod1].row(c.seg1) += c.stiffness*(1.0 - c.bary1)*(pt1 - pt2).transpose();
+            (*dEs)[c.rod1].row((c.seg1 + 1) % nverts1) += c.stiffness*c.bary1*(pt1 - pt2).transpose();
+            (*dEs)[c.rod2].row(c.seg2) -= c.stiffness*(1.0 - c.bary2)*(pt1 - pt2).transpose();
+            (*dEs)[c.rod2].row((c.seg2 + 1) % nverts1) -= c.stiffness*c.bary2*(pt1 - pt2).transpose();
+        }
+    }
+}
