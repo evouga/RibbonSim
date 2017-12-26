@@ -13,11 +13,34 @@ struct RodParams
     double rho;
 };
 
-double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
-void dAngle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, Eigen::Vector3d &dv1, Eigen::Vector3d &dv2);
+struct RodState
+{
+    Eigen::MatrixXd centerline;
+    Eigen::MatrixXd directors;
+    Eigen::VectorXd thetas;
+    Eigen::MatrixXd ceterlineVel;
+    Eigen::VectorXd directorAngVel;
+};
 
-double rodEnergy(const Eigen::MatrixXd &centerline, const Eigen::VectorXd &restlens, const RodParams &params, Eigen::MatrixXd &dE);
+class Rod
+{
+public:
+    Rod(const RodState &startState, const RodParams &params);
 
-void masses(const Eigen::VectorXd &restlens, Eigen::VectorXd &M, const RodParams &params);
+    RodState curState;
+    RodState startState;
+
+    Eigen::VectorXd restlens;
+    Eigen::VectorXd masses;
+    Eigen::VectorXd momInertia;
+    RodParams params;
+
+private:
+    void initializeRestQuantities();
+};
+
+double rodEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE, Eigen::VectorXd *dtheta);
+
+Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2);
 
 #endif

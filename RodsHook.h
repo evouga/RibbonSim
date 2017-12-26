@@ -4,46 +4,80 @@
 class RodsHook : public PhysicsHook
 {
 public:
-    RodsHook() : PhysicsHook(), dirty(true) {
+    RodsHook() : PhysicsHook(), dirty(true), rod(NULL) {
     }
 
     virtual void initGUI(igl::viewer::Viewer &viewer);
 
     virtual void initSimulation()
     {
-        //make helix
-        centerline.resize(100, 3);
-        vel.resize(100, 3);
-        vel.setZero();
-        for (int i = 0; i < 100; i++)
+        RodState rs;
+        int nverts = 100;
+        rs.centerline.resize(nverts, 3);
+        rs.ceterlineVel.resize(nverts, 3);
+        rs.ceterlineVel.setZero();
+
+        for (int i = 0; i < nverts; i++)
         {
             double r = 0.2 + 0.1 * sin(double(i) / 10);
-            centerline(i, 0) = r*cos(double(i) / 4.0);
-            centerline(i, 1) = r*sin(double(i) / 4.0);
-            centerline(i, 2) = double(i) / 100;            
+            rs.centerline(i, 0) = r*cos(double(i) / 4.0);
+            rs.centerline(i, 1) = r*sin(double(i) / 4.0);
+            rs.centerline(i, 2) = double(i) / nverts;            
         }
-        int nverts = centerline.rows();
-        restlens.resize(nverts - 1);
+        
+        
+        rs.directors.resize(nverts-1, 3);
+        rs.directors.setZero();
+        rs.directorAngVel.resize(nverts - 1);
+        rs.directorAngVel.setZero();
+
+        rs.thetas.resize(nverts - 1);
+        rs.thetas.setZero();
+
+        for (int i = 1; i < nverts - 1; i++)
+        {
+            Eigen::Vector3d v0 = rs.centerline.row(i - 1);
+            Eigen::Vector3d v1 = rs.centerline.row(i);
+            Eigen::Vector3d v2 = rs.centerline.row(i + 1);
+            Eigen::Vector3d d = (v1 - v0).cross(v2 - v1);
+            rs.directors.row(i - 1) += (v1-v0).cross(d);
+            rs.directors.row(i) += (v2-v1).cross(d);
+        }
         for (int i = 0; i < nverts - 1; i++)
         {
-            restlens[i] = (centerline.row(i + 1) - centerline.row(i)).norm();
+            rs.directors.row(i) /= rs.directors.row(i).norm();
         }
 
-        masses(restlens, M, params);
+        
+        if (rod)
+            delete rod;
+        rod = new Rod(rs, params);
         createVisualizationMesh();
+        Eigen::MatrixXd dE;
+        rodEnergy(*rod, rod->curState, &dE, NULL);
+        showForces(dE);
 
-        /*for (int i = 0; i < nverts; i++)
+        /*double energy = rodEnergy(*rod, rod->curState, NULL, NULL);
+        for (int i = 0; i < nverts; i++)
         {
             for (int j = 0; j < 3; j++)
             {
-                Eigen::MatrixXd cp = centerline;
-                cp(i, j) += 1e-7;
+                RodState cp = rod->curState;
+                cp.centerline(i, j) += 1e-6;
                 Eigen::MatrixXd dE;
-                double energy = rodEnergy(centerline, restlens, params, dE);
-                double newenergy = rodEnergy(cp, restlens, params, dE);
-                double findiff = (newenergy - energy) / 1e-7;
+                double newenergy = rodEnergy(*rod, cp, &dE, NULL);
+                double findiff = (newenergy - energy) / 1e-6;
                 std::cout << findiff << " " << dE(i, j) << std::endl;
             }
+        }
+        for (int i = 0; i < nverts - 1; i++)
+        {
+            RodState cp = rod->curState;
+            cp.thetas[i] += 1e-6;
+            Eigen::VectorXd dtheta;
+            double newenergy = rodEnergy(*rod, cp, NULL, &dtheta);
+            double findiff = (newenergy - energy) / 1e-6;
+            std::cout << findiff << " " << dtheta[i] << std::endl;
         }
         
         while (true);*/
@@ -57,20 +91,8 @@ public:
         renderF = F;
     }
 
-    virtual bool simulateOneStep()
-    {
-        int nverts = centerline.rows();
-        centerline += dt*vel;
-        Eigen::MatrixXd dE;
-        double energy = rodEnergy(centerline, restlens, params, dE);
-        for (int i = 0; i < nverts; i++)
-            dE.row(i) /= M[i];
-        vel -= dt*dE;
-        std::cout << "Energy: " << energy << std::endl;
-        createVisualizationMesh();
-        return false;
-    }
-
+    virtual bool simulateOneStep();
+    
     virtual void renderRenderGeometry(igl::viewer::Viewer &viewer)
     {
         if (dirty)
@@ -79,21 +101,23 @@ public:
             dirty = false;
         }
         viewer.data.set_mesh(renderQ, renderF);
+        viewer.data.set_edges(forcePoints, forceEdges, forceColors);
     }
 
 private:    
     void createVisualizationMesh();
+    void showForces(const Eigen::MatrixXd &dE);
 
     double dt;
     RodParams params;
-    Eigen::MatrixXd centerline;
-    Eigen::MatrixXd vel;
-    Eigen::VectorXd restlens;
-    Eigen::VectorXd M;
+    Rod *rod;
 
     // for visualization
     Eigen::MatrixXd Q;
     Eigen::MatrixXi F;
+    Eigen::MatrixXd forcePoints;
+    Eigen::MatrixXi forceEdges;
+    Eigen::MatrixXd forceColors;
 
     int segsPerEdge;
     Eigen::MatrixXd renderQ;

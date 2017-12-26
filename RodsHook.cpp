@@ -2,13 +2,14 @@
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
-    params.kbending = 1e8;
-    params.kstretching = 1e8;
-    params.ktwist = 1e8 / 3.0;
+    double Y = 1e9;
+    params.kbending = Y;
+    params.kstretching = Y;
+    params.ktwist = Y / 3.0;
     params.rho = 1.0;
     params.thickness = 1e-4;
-    params.width = 0.01;
-    dt = 1e-6;
+    params.width = .01;
+    dt = 1e-7;
 
     viewer.ngui->addGroup("Rod Parameters");
     viewer.ngui->addVariable("Thickness", params.thickness);
@@ -22,42 +23,57 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     
 }
 
+void RodsHook::showForces(const Eigen::MatrixXd &dE)
+{
+    int nverts = rod->curState.centerline.rows();
+    forcePoints.resize(2*nverts, 3);
+    forceEdges.resize(nverts, 2);
+    forceColors.resize(nverts, 3);
+    for (int i = 0; i < nverts; i++)
+    {
+        forcePoints.row(2 * i) = rod->curState.centerline.row(i);
+        forcePoints.row(2 * i+1) = rod->curState.centerline.row(i) - 1e-1*dE.row(i);
+        forceEdges(i, 0) = 2 * i;
+        forceEdges(i, 1) = 2 * i + 1;
+        forceColors.row(i) = Eigen::Vector3d(1, 0, 0);
+    }
+}
+
 void RodsHook::createVisualizationMesh()
 {
-    int nverts = centerline.rows();
-    Eigen::MatrixXd B(nverts, 3);
-    for (int i = 0; i < nverts - 2; i++)
+    int nverts = rod->curState.centerline.rows();
+    Eigen::MatrixXd N(nverts-1, 3);
+    Eigen::MatrixXd B(nverts-1, 3);
+    for (int i = 0; i < nverts - 1; i++)
     {
-        Eigen::Vector3d v0 = centerline.row(i).transpose();
-        Eigen::Vector3d v1 = centerline.row(i+1).transpose();
-        Eigen::Vector3d v2 = centerline.row(i+2).transpose();
-        Eigen::Vector3d b = (v1 - v0).cross(v2 - v1);
-        b /= b.norm();
-        B.row(i + 1) = b.transpose();
+        Eigen::Vector3d v0 = rod->curState.centerline.row(i);
+        Eigen::Vector3d v1 = rod->curState.centerline.row(i+1);
+        Eigen::Vector3d e = v1 - v0;
+        e /= e.norm();
+        Eigen::Vector3d d1 = rod->curState.directors.row(i);
+        Eigen::Vector3d d2 = e.cross(d1);
+        double theta = rod->curState.thetas[i];
+        N.row(i) = d1*cos(theta) + d2*sin(theta);
+        B.row(i) = -d1*sin(theta) + d2*cos(theta);
     }
-    B.row(0) = B.row(1);
-    B.row(nverts - 1) = B.row(nverts - 2);
+    
     int nedges = nverts - 1;
     Q.resize(8 * nedges, 3);
     F.resize(8 * nedges, 3);
     for (int i = 0; i < nedges; i++)
     {
-        Eigen::Vector3d v0 = centerline.row(i).transpose();
-        Eigen::Vector3d v1 = centerline.row(i+1).transpose();
+        Eigen::Vector3d v0 = rod->curState.centerline.row(i);
+        Eigen::Vector3d v1 = rod->curState.centerline.row(i+1);
         Eigen::Vector3d T = v1 - v0;
         T /= T.norm();
-        Eigen::Vector3d B1 = B.row(i).transpose();
-        Eigen::Vector3d B2 = B.row(i+1).transpose();
-        Eigen::Vector3d N1 = B1.cross(T);
-        Eigen::Vector3d N2 = B2.cross(T);
-        Q.row(8 * i + 0) = (v0 + params.thickness / 2.0 * N1 - params.width / 2.0 * B1).transpose();
-        Q.row(8 * i + 1) = (v0 + params.thickness / 2.0 * N1 + params.width / 2.0 * B1).transpose();
-        Q.row(8 * i + 2) = (v0 - params.thickness / 2.0 * N1 + params.width / 2.0 * B1).transpose();
-        Q.row(8 * i + 3) = (v0 - params.thickness / 2.0 * N1 - params.width / 2.0 * B1).transpose();
-        Q.row(8 * i + 4) = (v1 + params.thickness / 2.0 * N2 - params.width / 2.0 * B2).transpose();
-        Q.row(8 * i + 5) = (v1 + params.thickness / 2.0 * N2 + params.width / 2.0 * B2).transpose();
-        Q.row(8 * i + 6) = (v1 - params.thickness / 2.0 * N2 + params.width / 2.0 * B2).transpose();
-        Q.row(8 * i + 7) = (v1 - params.thickness / 2.0 * N2 - params.width / 2.0 * B2).transpose();
+        Q.row(8 * i + 0) = (v0.transpose() + params.thickness / 2.0 * N.row(i) - params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 1) = (v0.transpose() + params.thickness / 2.0 * N.row(i) + params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 2) = (v0.transpose() - params.thickness / 2.0 * N.row(i) + params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 3) = (v0.transpose() - params.thickness / 2.0 * N.row(i) - params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 4) = (v1.transpose() + params.thickness / 2.0 * N.row(i) - params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 5) = (v1.transpose() + params.thickness / 2.0 * N.row(i) + params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 6) = (v1.transpose() - params.thickness / 2.0 * N.row(i) + params.width / 2.0 * B.row(i));
+        Q.row(8 * i + 7) = (v1.transpose() - params.thickness / 2.0 * N.row(i) - params.width / 2.0 * B.row(i));
         for (int j = 0; j < 4; j++)
         {
             F(8 * i + 2 * j, 0) = 8 * i + j;
@@ -69,3 +85,74 @@ void RodsHook::createVisualizationMesh()
         }
     }
 }
+
+int iter = 0;
+
+bool RodsHook::simulateOneStep()
+{
+    int nverts = rod->curState.centerline.rows();
+    for (int i = 0; i < nverts-1; i++)
+    {
+        Eigen::Vector3d oldv1 = rod->curState.centerline.row(i);
+        Eigen::Vector3d oldv2 = rod->curState.centerline.row(i+1);
+        Eigen::Vector3d v1 = oldv1 + dt*rod->curState.ceterlineVel.row(i).transpose();
+        Eigen::Vector3d v2 = oldv2 + dt*rod->curState.ceterlineVel.row(i+1).transpose();
+
+        rod->curState.directors.row(i) = parallelTransport(rod->curState.directors.row(i), oldv2 - oldv1, v2 - v1);
+    }
+    rod->curState.centerline += dt*rod->curState.ceterlineVel;
+    rod->curState.thetas += dt*rod->curState.directorAngVel;
+
+    Eigen::MatrixXd dE;
+    Eigen::VectorXd dtheta;
+    double energy = rodEnergy(*rod, rod->curState, &dE, &dtheta);
+    
+    createVisualizationMesh();
+    showForces(dE);
+    
+    for (int i = 0; i < nverts; i++)
+    {
+        dE.row(i) /= rod->masses[i];
+    }
+    for (int i = 0; i < nverts - 1; i++)
+    {
+        dtheta[i] /= rod->momInertia[i];
+    }
+        
+    rod->curState.ceterlineVel -= dt*dE;
+    rod->curState.directorAngVel -= dt*dtheta;
+    
+    std::cout << "Energy: " << energy << std::endl;
+    iter++;
+
+    /*if (iter == 100)
+    {
+        rod->params.kstretching = 0;
+        double energy = rodEnergy(*rod, rod->curState, NULL, NULL);
+        for (int i = 0; i < nverts; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                RodState cp = rod->curState;
+                cp.centerline(i, j) += 1e-6;
+                Eigen::MatrixXd dE;
+                double newenergy = rodEnergy(*rod, cp, &dE, NULL);
+                double findiff = (newenergy - energy) / 1e-6;
+                std::cout << findiff << " " << dE(i, j) << std::endl;
+            }
+        }
+        for (int i = 0; i < nverts - 1; i++)
+        {
+            RodState cp = rod->curState;
+            cp.thetas[i] += 1e-6;
+            Eigen::VectorXd dtheta;
+            double newenergy = rodEnergy(*rod, cp, NULL, &dtheta);
+            double findiff = (newenergy - energy) / 1e-6;
+            std::cout << findiff << " " << dtheta[i] << std::endl;
+        }
+        while (true);
+    }*/
+
+    return false;
+}
+
