@@ -1,4 +1,5 @@
 #include "RodsHook.h"
+#include "RodParser.h"
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
@@ -19,7 +20,12 @@ void RodsHook::initSimulation()
     iter = 0;
     forceResidual = 0;
 
-    RodParams params;
+    if (config)
+        delete config;
+
+    config = readRod("../configs/example.rod");
+
+    /*RodParams params;
     double Y = 1e8;
     params.kbending = Y;
     params.kstretching = Y;
@@ -27,8 +33,7 @@ void RodsHook::initSimulation()
     params.rho = 1.0;
     params.thickness = 1e-4;    
 
-    if (config)
-        delete config;
+   
     config = new RodConfig;
     double PI = 3.1415926525898;
 
@@ -102,36 +107,54 @@ void RodsHook::initSimulation()
         }
     }
 
+    std::ofstream ofs("example.rod");
+    ofs << config->numRods() << std::endl;
+    ofs << config->constraints.size() << std::endl;
+    ofs << params.thickness << std::endl;
+    ofs << Y << std::endl;
+    ofs << params.rho << std::endl;
+    ofs << std::endl << std::endl;
+    for (int i = 0; i < config->numRods(); i++)
+    {
+        ofs << config->rods[i]->numVertices() << std::endl;
+        ofs << (config->rods[i]->isClosed() ? '1' : '0') << std::endl;
+        for (int j = 0; j < config->rods[i]->numVertices(); j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                ofs << config->rods[i]->startState.centerline(j, k) << " ";
+            }            
+        }
+        ofs << std::endl;
+        for (int j = 0; j < config->rods[i]->numSegments(); j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                ofs << config->rods[i]->startState.directors(j, k) << " ";
+            }            
+        }
+        ofs << std::endl;
+        for (int j = 0; j < config->rods[i]->numSegments(); j++)
+        {
+            ofs << config->rods[i]->widths[j] << " ";
+        }
+        ofs << std::endl;
+        ofs << std::endl;
+    }
+    for (int i = 0; i < config->constraints.size(); i++)
+    {
+        ofs << config->constraints[i].rod1 << std::endl;
+        ofs << config->constraints[i].rod2 << std::endl;
+        ofs << config->constraints[i].seg1 << std::endl;
+        ofs << config->constraints[i].seg2 << std::endl;
+        ofs << config->constraints[i].bary1 << std::endl;
+        ofs << config->constraints[i].bary2 << std::endl;
+        ofs << config->constraints[i].stiffness << std::endl;
+        ofs << std::endl;
+    }*/
+    
     createVisualizationMesh();
-    Eigen::MatrixXd dE;
-    //rodEnergy(*config->rods[1], config->rods[1]->curState, &dE, NULL);
-    //showForces(1, dE);
     dirty = true;
-
-    /*double energy = rodEnergy(*rod, rod->curState, NULL, NULL);
-    for (int i = 0; i < nverts; i++)
-    {
-    for (int j = 0; j < 3; j++)
-    {
-    RodState cp = rod->curState;
-    cp.centerline(i, j) += 1e-6;
-    Eigen::MatrixXd dE;
-    double newenergy = rodEnergy(*rod, cp, &dE, NULL);
-    double findiff = (newenergy - energy) / 1e-6;
-    std::cout << findiff << " " << dE(i, j) << std::endl;
-    }
-    }
-    for (int i = 0; i < nverts - 1; i++)
-    {
-    RodState cp = rod->curState;
-    cp.thetas[i] += 1e-6;
-    Eigen::VectorXd dtheta;
-    double newenergy = rodEnergy(*rod, cp, NULL, &dtheta);
-    double findiff = (newenergy - energy) / 1e-6;
-    std::cout << findiff << " " << dtheta[i] << std::endl;
-    }
-
-    while (true);*/
 }
 
 
