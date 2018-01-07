@@ -1,4 +1,5 @@
 #include "RodConfig.h"
+#include <iostream>
 
 Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
 {
@@ -15,7 +16,8 @@ Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams
         Eigen::Vector3d v2 = startState.centerline.row((i+1)%nverts);
         Eigen::Vector3d e = (v2 - v1);
         e /= e.norm();
-        assert(fabs(e.dot(startState.directors.row(i))) < 1e-6);
+        double dotprod = e.dot(startState.directors.row(i));
+        assert(fabs(dotprod) < 1e-6);
     }
     curState = startState;
     widths = segwidths;

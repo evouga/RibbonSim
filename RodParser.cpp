@@ -41,7 +41,7 @@ RodConfig *readRod(const char *filename)
             {
                 ifs >> rs.centerline(j, k);
             }
-        }
+        }        
         rs.centerlineVel.resize(nverts, 3);
         rs.centerlineVel.setZero();
         rs.directors.resize(nsegs, 3);
@@ -51,7 +51,24 @@ RodConfig *readRod(const char *filename)
             {
                 ifs >> rs.directors(j, k);
             }
-            rs.directors.row(j) /= rs.directors.row(j).norm();
+            Eigen::Vector3d v0 = rs.centerline.row(j);
+            Eigen::Vector3d v1 = rs.centerline.row((j + 1) % nverts);
+            Eigen::Vector3d e = v1 - v0;
+            e /= e.norm();
+            double dote = rs.directors.row(j).dot(e);
+            if (fabs(dote) > 1e-4)
+                std::cout << "Warning: directors not orthogonal to the centerline" << std::endl;
+            rs.directors.row(j) -= dote * e;
+            rs.directors.row(j) /= rs.directors.row(j).norm();  
+            
+        }        
+        for (int j = 0; j < nsegs - 1; j++)
+        {
+            if (rs.directors.row(j).dot(rs.directors.row(j + 1)) < 0)
+            {
+                std::cerr << "Error: director angle > pi/2!" << std::endl;
+                exit(-1);
+            }
         }
         rs.thetas.resize(nsegs);
         rs.thetas.setZero();
@@ -60,7 +77,9 @@ RodConfig *readRod(const char *filename)
 
         Eigen::VectorXd widths(nsegs);
         for (int i = 0; i < nsegs; i++)
+        {
             ifs >> widths[i];
+        }        
         Rod *r = new Rod(rs, widths, params, isclosed);
         ret->addRod(r);
     }

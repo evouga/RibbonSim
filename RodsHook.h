@@ -16,7 +16,7 @@ public:
         if (Q.rows() != renderQ.rows() || F.rows() != renderF.rows())
             dirty = true;
         renderQ = Q;
-        renderF = F;
+        renderF = F;        
     }
 
     virtual bool simulateOneStep();

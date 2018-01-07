@@ -23,136 +23,10 @@ void RodsHook::initSimulation()
     if (config)
         delete config;
 
-    config = readRod("../configs/example.rod");
-
-    /*RodParams params;
-    double Y = 1e8;
-    params.kbending = Y;
-    params.kstretching = Y;
-    params.ktwist = Y / 3.0;
-    params.rho = 1.0;
-    params.thickness = 1e-4;    
-
+    config = readRod("../configs/torus.rod");
+    if (!config)
+        exit(-1);
    
-    config = new RodConfig;
-    double PI = 3.1415926525898;
-
-    int nrods = 4;
-    for (int rod = 0; rod < nrods; rod++)
-    {
-        Eigen::Matrix3d rot;
-        double angle = PI*double(rod) / double(nrods);
-        rot << 1.0, 0.0, 0.0,
-            0.0, cos(angle), sin(angle),
-            0.0, -sin(angle), cos(angle);
-
-        RodState rs;
-        int nverts = 100;
-        rs.centerline.resize(nverts, 3);
-        rs.centerlineVel.resize(nverts, 3);
-        rs.centerlineVel.setZero();
-
-        for (int i = 0; i < nverts; i++)
-        {
-            double r = 0.2 + 0.1 * sin(2.0*PI*double(i) / 50);
-            rs.centerline(i, 0) = r*cos(2.0*PI*(double(i)-0.5) / 100.0);
-            rs.centerline(i, 1) = r*sin(2.0*PI*(double(i)-0.5) / 100.0);
-            rs.centerline(i, 2) = 0; //double(i) / nverts;            
-            rs.centerline.row(i) = rs.centerline.row(i)*rot.transpose();
-        }
-
-
-        rs.directors.resize(nverts, 3);
-        rs.directors.setZero();
-        rs.directorAngVel.resize(nverts);
-        rs.directorAngVel.setZero();
-
-        rs.thetas.resize(nverts);
-        rs.thetas.setZero();
-        int nsegs = nverts;
-        Eigen::VectorXd widths(nsegs);
-        for (int i = 0; i < nverts; i++)
-        {
-            Eigen::Vector3d v1 = rs.centerline.row(i);
-            Eigen::Vector3d v2 = rs.centerline.row((i + 1) % nverts);
-            Eigen::Vector3d perp(0, 0, 1);
-            perp = rot*perp;
-            Eigen::Vector3d d = perp.cross(v2 - v1);
-            rs.directors.row(i) = d;
-
-            widths[i] = 0.01 + double(rod) / double(nrods) * 0.02 * (v1[2] + v2[2]);
-        }
-        for (int i = 0; i < nsegs; i++)
-        {
-            rs.directors.row(i) /= rs.directors.row(i).norm();            
-        }
-
-        Rod *therod = new Rod(rs, widths, params, true);
-        config->addRod(therod);
-    }
-
-    for (int i = 0; i < nrods; i++)
-    {
-        for (int j = i + 1; j < nrods; j++)
-        {
-            Constraint c;
-            c.rod1 = i;
-            c.rod2 = j;
-            c.seg1 = 0;
-            c.seg2 = 0;
-            c.bary1 = 0.5;
-            c.bary2 = 0.5;
-            c.stiffness = 100;
-            config->addConstraint(c);
-        }
-    }
-
-    std::ofstream ofs("example.rod");
-    ofs << config->numRods() << std::endl;
-    ofs << config->constraints.size() << std::endl;
-    ofs << params.thickness << std::endl;
-    ofs << Y << std::endl;
-    ofs << params.rho << std::endl;
-    ofs << std::endl << std::endl;
-    for (int i = 0; i < config->numRods(); i++)
-    {
-        ofs << config->rods[i]->numVertices() << std::endl;
-        ofs << (config->rods[i]->isClosed() ? '1' : '0') << std::endl;
-        for (int j = 0; j < config->rods[i]->numVertices(); j++)
-        {
-            for (int k = 0; k < 3; k++)
-            {
-                ofs << config->rods[i]->startState.centerline(j, k) << " ";
-            }            
-        }
-        ofs << std::endl;
-        for (int j = 0; j < config->rods[i]->numSegments(); j++)
-        {
-            for (int k = 0; k < 3; k++)
-            {
-                ofs << config->rods[i]->startState.directors(j, k) << " ";
-            }            
-        }
-        ofs << std::endl;
-        for (int j = 0; j < config->rods[i]->numSegments(); j++)
-        {
-            ofs << config->rods[i]->widths[j] << " ";
-        }
-        ofs << std::endl;
-        ofs << std::endl;
-    }
-    for (int i = 0; i < config->constraints.size(); i++)
-    {
-        ofs << config->constraints[i].rod1 << std::endl;
-        ofs << config->constraints[i].rod2 << std::endl;
-        ofs << config->constraints[i].seg1 << std::endl;
-        ofs << config->constraints[i].seg2 << std::endl;
-        ofs << config->constraints[i].bary1 << std::endl;
-        ofs << config->constraints[i].bary2 << std::endl;
-        ofs << config->constraints[i].stiffness << std::endl;
-        ofs << std::endl;
-    }*/
-    
     createVisualizationMesh();
     dirty = true;
 }
@@ -213,7 +87,8 @@ bool RodsHook::simulateOneStep()
         Eigen::MatrixXd dE;
         Eigen::VectorXd dtheta;
         double energy = rodEnergy(*config->rods[rod], config->rods[rod]->curState, &dE, &dtheta);
-
+        if (rod == 0)
+            showForces(0, dE);
         dE += constraintdE[rod];
 
         int nverts = config->rods[rod]->numVertices();
@@ -238,29 +113,29 @@ bool RodsHook::simulateOneStep()
     }
     forceResidual = newresid;
     iter++;
-    
-    /*if (iter == 100)
+    /*
+    if (iter == 10000)
     {
-        rod->params.kstretching = 0;
-        double energy = rodEnergy(*rod, rod->curState, NULL, NULL);
-        for (int i = 0; i < nverts; i++)
+        config->rods[0]->params.kstretching = 0;
+        double energy = rodEnergy(*config->rods[0], config->rods[0]->curState, NULL, NULL);
+        for (int i = 0; i < config->rods[0]->numVertices(); i++)
         {
             for (int j = 0; j < 3; j++)
             {
-                RodState cp = rod->curState;
+                RodState cp = config->rods[0]->curState;
                 cp.centerline(i, j) += 1e-6;
                 Eigen::MatrixXd dE;
-                double newenergy = rodEnergy(*rod, cp, &dE, NULL);
+                double newenergy = rodEnergy(*config->rods[0], cp, &dE, NULL);
                 double findiff = (newenergy - energy) / 1e-6;
                 std::cout << findiff << " " << dE(i, j) << std::endl;
             }
         }
-        for (int i = 0; i < nverts - 1; i++)
+        for (int i = 0; i < config->rods[0]->numSegments(); i++)
         {
-            RodState cp = rod->curState;
+            RodState cp = config->rods[0]->curState;
             cp.thetas[i] += 1e-6;
             Eigen::VectorXd dtheta;
-            double newenergy = rodEnergy(*rod, cp, NULL, &dtheta);
+            double newenergy = rodEnergy(*config->rods[0], cp, NULL, &dtheta);
             double findiff = (newenergy - energy) / 1e-6;
             std::cout << findiff << " " << dtheta[i] << std::endl;
         }

@@ -152,11 +152,10 @@ double rodEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE, Eig
         dtheta->resize(state.thetas.size());
         dtheta->setZero();
     }
-    double energy = 0;
-    energy += stretchingEnergy(rod, state, dE);
-    energy += bendingEnergy(rod, state, dE, dtheta);
-    energy += twistingEnergy(rod, state, dE, dtheta);
-    return energy;
+    double senergy = stretchingEnergy(rod, state, dE);
+    double benergy = bendingEnergy(rod, state, dE, dtheta);
+    double tenergy = twistingEnergy(rod, state, dE, dtheta);
+    return senergy + benergy + tenergy;
 }
 
 Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
@@ -210,4 +209,5 @@ double constraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs)
             (*dEs)[c.rod2].row((c.seg2 + 1) % nverts1) -= c.stiffness*c.bary2*(pt1 - pt2).transpose();
         }
     }
+    return totenergy;
 }
