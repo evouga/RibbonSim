@@ -63,6 +63,7 @@ public:
     int numRods() const { return (int)rods.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
+    void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;
     std::vector<Constraint> constraints;

@@ -5,10 +5,13 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
     dt = 1e-7;
     damp = 100;
+    savePrefix = "rod_";
 
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
     viewer.ngui->addVariable("Damping Factor", damp);
+    viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
+    viewer.ngui->addVariable("Save Prefix", savePrefix);
     
     viewer.ngui->addGroup("Sim Status");
     viewer.ngui->addVariable("Iteration", iter, false);
@@ -145,3 +148,7 @@ bool RodsHook::simulateOneStep()
     return false;
 }
 
+void RodsHook::saveRods()
+{
+    config->saveRodGeometry(savePrefix);
+}

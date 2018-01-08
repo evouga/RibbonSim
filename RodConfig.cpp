@@ -1,5 +1,7 @@
 #include "RodConfig.h"
 #include <iostream>
+#include <sstream>
+#include <igl/writeOBJ.h>
 
 Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
 {
@@ -145,5 +147,62 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
             }
         }
         offset += 8 * rods[rod]->numSegments();
+    }
+}
+
+void RodConfig::saveRodGeometry(const std::string &prefix)
+{
+    int nrods = (int)rods.size();
+    
+    for (int rod = 0; rod < nrods; rod++)
+    {
+        int nverts = rods[rod]->numVertices();
+        int nsegs = rods[rod]->numSegments();
+        Eigen::MatrixXd N(nsegs, 3);
+        Eigen::MatrixXd B(nsegs, 3);
+        for (int i = 0; i < nsegs; i++)
+        {
+            Eigen::Vector3d v0 = rods[rod]->curState.centerline.row(i);
+            Eigen::Vector3d v1 = rods[rod]->curState.centerline.row((i + 1) % nverts);
+            Eigen::Vector3d e = v1 - v0;
+            e /= e.norm();
+            Eigen::Vector3d d1 = rods[rod]->curState.directors.row(i);
+            Eigen::Vector3d d2 = e.cross(d1);
+            double theta = rods[rod]->curState.thetas[i];
+            N.row(i) = d1*cos(theta) + d2*sin(theta);
+            B.row(i) = -d1*sin(theta) + d2*cos(theta);
+        }
+
+        Eigen::MatrixXd Q(2 * nverts, 3);
+        Eigen::MatrixXi F(2 * nsegs, 3);
+
+        for (int i = 0; i < nsegs; i++)
+        {
+            Eigen::Vector3d v0 = rods[rod]->curState.centerline.row(i);
+            Eigen::Vector3d v1 = rods[rod]->curState.centerline.row((i + 1) % nverts);
+            Eigen::Vector3d T = v1 - v0;
+            T /= T.norm();
+
+            double weight;
+            if ((i == 0 || i == nsegs - 1) && !rods[rod]->isClosed())
+                weight = 1.0;
+            else weight = 0.5;
+
+            Q.row(2 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
+            
+            F(2 * i + 0, 0) = 2 * i + 0;
+            F(2 * i + 0, 1) = 2 * i + 1;
+            F(2 * i + 0, 2) = 2 * i + 2;
+            F(2 * i + 1, 0) = 2 * i + 2;
+            F(2 * i + 1, 1) = 2 * i + 1;
+            F(2 * i + 1, 2) = 2 * i + 3;
+        }
+
+        std::stringstream ss;
+        ss << prefix << rod << ".obj";
+        igl::writeOBJ(ss.str(), Q, F);
     }
 }

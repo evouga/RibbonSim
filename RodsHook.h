@@ -33,6 +33,8 @@ public:
             viewer.data.set_edges(forcePoints, forceEdges, forceColors);
     }
 
+    void saveRods();
+
 private:    
     void createVisualizationMesh();
     void showForces(int rod, const Eigen::MatrixXd &dE);
@@ -44,6 +46,8 @@ private:
     double forceResidual;
     
     RodConfig *config;
+
+    std::string savePrefix;
 
     // for visualization
     Eigen::MatrixXd Q;
