@@ -39,6 +39,8 @@ private:
     void createVisualizationMesh();
     void showForces(int rod, const Eigen::MatrixXd &dE);
 
+    std::string loadName;
+
     double dt;
     double damp;
 

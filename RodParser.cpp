@@ -66,8 +66,8 @@ RodConfig *readRod(const char *filename)
         {
             if (rs.directors.row(j).dot(rs.directors.row(j + 1)) < 0)
             {
-                std::cerr << "Error: director angle > pi/2!" << std::endl;
-                exit(-1);
+                std::cerr << "Warning: director angle > pi/2!" << std::endl;
+                //exit(-1);
             }
         }
         rs.thetas.resize(nsegs);

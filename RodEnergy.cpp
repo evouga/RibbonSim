@@ -171,19 +171,9 @@ Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3
     return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
 }
 
-double constraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs)
+double positionConstraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs)
 {
-    int nrods = config.numRods();
-    if (dEs)
-    {
-        dEs->resize(nrods);
-        for (int i = 0; i < nrods; i++)
-        {
-            int nverts = config.rods[i]->numVertices();
-            (*dEs)[i].resize(nverts, 3);
-            (*dEs)[i].setZero();
-        }
-    }
+    
     int nconstraints = (int)config.constraints.size();
     double totenergy = 0;
     for (int i = 0; i < nconstraints; i++)
@@ -211,3 +201,84 @@ double constraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs)
     }
     return totenergy;
 }
+
+double directorConstraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs, std::vector<Eigen::VectorXd> *dthetas)
+{
+    int nconstraints = (int)config.constraints.size();
+    double totenergy = 0;
+    for (int i = 0; i < nconstraints; i++)
+    {
+        const Constraint &c = config.constraints[i];
+        const RodState &rs1 = config.rods[c.rod1]->curState;
+        const RodState &rs2 = config.rods[c.rod2]->curState;
+        
+        Eigen::Vector3d v0 = rs1.centerline.row(c.seg1).transpose();
+        Eigen::Vector3d v1 = rs1.centerline.row((c.seg1 + 1) % config.rods[c.rod1]->numVertices()).transpose();
+        
+        Eigen::Vector3d w0 = rs2.centerline.row(c.seg2).transpose();
+        Eigen::Vector3d w1 = rs2.centerline.row((c.seg2 + 1) % config.rods[c.rod2]->numVertices()).transpose();
+
+        Eigen::Vector3d t01 = (v1 - v0) / (v1 - v0).norm();
+        Eigen::Vector3d t12 = (w1 - w0) / (w1 - w0).norm();
+        Eigen::Vector3d kb = 2.0*t01.cross(t12) / (1.0 + t01.dot(t12));
+        Eigen::Vector3d db11 = rs1.directors.row(c.seg1);
+        Eigen::Vector3d db21 = t01.cross(db11);
+        Eigen::Vector3d db12 = rs2.directors.row(c.seg2);
+        Eigen::Vector3d db22 = t12.cross(db12);
+        double theta1 = rs1.thetas[c.seg1];
+        double theta2 = rs2.thetas[c.seg2];
+        Eigen::Vector3d d1 = db11*cos(theta1) + db21*sin(theta1);
+        Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
+        Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, w1 - w0);
+        double theta = angle(d1t, d2, t12);
+        double factor = 0.5 * c.stiffness;
+        totenergy += factor*theta*theta;
+        if (dEs)
+        {
+            Eigen::Vector3d dtheta1 = 0.5*kb / (v1 - v0).norm();
+            Eigen::Vector3d dtheta2 = 0.5*kb / (w1 - w0).norm();
+            (*dEs)[c.rod1].row(c.seg1) += -2.0*factor*theta*dtheta1;
+            (*dEs)[c.rod1].row((c.seg1 + 1) % config.rods[c.rod1]->numVertices()) += 2.0*factor*theta*dtheta1;
+            
+            (*dEs)[c.rod2].row(c.seg2) += -2.0*factor*theta*dtheta2;
+            (*dEs)[c.rod2].row((c.seg2 + 1) % config.rods[c.rod2]->numVertices()) += 2.0*factor*theta*dtheta2;
+        }
+        if (dthetas)
+        {
+            (*dthetas)[c.rod1][c.seg1] -= 2.0*factor*theta;
+            (*dthetas)[c.rod2][c.seg2] += 2.0*factor*theta;
+        }
+    }
+    return totenergy;
+}
+
+double constraintEnergy(RodConfig &config, std::vector<Eigen::MatrixXd> *dEs, std::vector<Eigen::VectorXd> *dthetas)
+{
+    int nrods = config.numRods();
+    double result = 0;
+    if (dEs)
+    {
+        dEs->resize(nrods);
+        for (int i = 0; i < nrods; i++)
+        {
+            int nverts = config.rods[i]->numVertices();
+            (*dEs)[i].resize(nverts, 3);
+            (*dEs)[i].setZero();
+        }
+    }
+    if (dthetas)
+    {
+        dthetas->resize(nrods);
+        for (int i = 0; i < nrods; i++)
+        {
+            int nsegs = config.rods[i]->numSegments();
+            (*dthetas)[i].resize(nsegs);
+            (*dthetas)[i].setZero();
+        }
+    }
+    result += positionConstraintEnergy(config, dEs);
+    result += directorConstraintEnergy(config, dEs, dthetas);
+
+    return result;
+}
+

@@ -6,6 +6,9 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     dt = 1e-7;
     damp = 100;
     savePrefix = "rod_";
+    loadName = "../configs/torus.rod";
+
+    viewer.ngui->addVariable("Config File", loadName);
 
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
@@ -26,7 +29,7 @@ void RodsHook::initSimulation()
     if (config)
         delete config;
 
-    config = readRod("../configs/torus.rod");
+    config = readRod(loadName.c_str());
     if (!config)
         exit(-1);
    
@@ -82,7 +85,8 @@ bool RodsHook::simulateOneStep()
     double newresid = 0;
 
     std::vector<Eigen::MatrixXd> constraintdE;
-    constraintEnergy(*config, &constraintdE);
+    std::vector<Eigen::VectorXd> constraintdtheta;
+    constraintEnergy(*config, &constraintdE, &constraintdtheta);
 
     // update velocities
     for (int rod = 0; rod < nrods; rod++)
@@ -93,6 +97,7 @@ bool RodsHook::simulateOneStep()
         if (rod == 0)
             showForces(0, dE);
         dE += constraintdE[rod];
+        dtheta += constraintdtheta[rod];
 
         int nverts = config->rods[rod]->numVertices();
         int nsegs = config->rods[rod]->numSegments();
