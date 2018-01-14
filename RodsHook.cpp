@@ -6,9 +6,12 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     dt = 1e-7;
     damp = 100;
     savePrefix = "rod_";
-    loadName = "../configs/torus.rod";
+    
+    loadName = "bunny";
+    refreshLoadBuffers();
 
     viewer.ngui->addVariable("Config File", loadName);
+    viewer.ngui->addVariable("Show Target", showTarget);
 
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
@@ -21,6 +24,12 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addVariable("Force Residual", forceResidual, false);
 }
 
+void RodsHook::refreshLoadBuffers()
+{
+    sprintf( loadBuffer, "../configs/%s.rod", loadName.c_str() );
+    sprintf( meshBuffer, "../../relax-field/meshes/%s.obj", loadName.c_str() );
+}
+
 void RodsHook::initSimulation()
 {
     iter = 0;
@@ -29,9 +38,12 @@ void RodsHook::initSimulation()
     if (config)
         delete config;
 
-    config = readRod(loadName.c_str());
+    refreshLoadBuffers();
+    config = readRod(loadBuffer);
     if (!config)
         exit(-1);
+    config->loadTargetMesh(meshBuffer);
+
    
     createVisualizationMesh();
     dirty = true;

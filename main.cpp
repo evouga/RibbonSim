@@ -45,6 +45,8 @@ bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
 
 bool initGUI(igl::viewer::Viewer &viewer)
 {
+    viewer.ngui->window()->setVisible(false);
+    viewer.ngui->addWindow(Eigen::Vector2i(10, 10), "Sim Settings");
     viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
     viewer.ngui->addButton("Reset Sim", resetSimulation);
     hook->initGUI(viewer);    

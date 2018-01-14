@@ -62,11 +62,16 @@ public:
     void addConstraint(Constraint c);
     int numRods() const { return (int)rods.size(); }
     void reset();
+    void loadTargetMesh(const std::string &objname);
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
     void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;
     std::vector<Constraint> constraints;
+
+    // Target mesh - for optimization 
+    Eigen::MatrixXd V_mesh; // |V| x 3
+    Eigen::MatrixXi F_mesh; // |F| x 3
 };
 
 #endif

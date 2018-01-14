@@ -2,6 +2,10 @@
 #include <iostream>
 #include <sstream>
 #include <igl/writeOBJ.h>
+#include <igl/read_triangle_mesh.h>
+
+
+#include <Eigen/Geometry>
 
 Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
 {
@@ -87,6 +91,27 @@ void RodConfig::reset()
     for (int i = 0; i < nrods; i++)
     {
         rods[i]->curState = rods[i]->startState;
+    }
+}
+
+void RodConfig::loadTargetMesh(const std::string &objname)
+{
+    Eigen::MatrixXd Vtmp;
+    if (!igl::read_triangle_mesh(objname, Vtmp, F_mesh))
+    {
+        std::cerr << "Couldn't load mesh " << objname << std::endl;
+        exit(-1);
+    }
+    if (Vtmp.cols() < 3)
+    {
+        std::cerr << "Mesh must 3D" << std::endl;
+        exit(-1);
+    }
+    V_mesh.resize(Vtmp.rows(), 3);
+    //wtf
+    for (int i = 0; i < 3; i++)
+    {
+        V_mesh.col(i) = Vtmp.col(i);
     }
 }
 
