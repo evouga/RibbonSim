@@ -17,12 +17,13 @@ double projectionEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *
         Eigen::Vector3d c = rod.curState.closestFaceCentroids.row(i);
 	Eigen::Vector3d n = rod.curState.closestFaceNormals.row(i).transpose();
 	
-        Eigen::Vector3d diff = v - c;
+        Eigen::Vector3d diff = c - v;
 	double d = diff.dot(n);
-        energy += d * d;
+	double stiffness = rod.curState.kproject;
+        energy += stiffness * d * d;
         if (dE)
         {
-            dE->row(i) += 2 * d * n.transpose();
+            dE->row(i) -= 2 * stiffness * d * n.transpose();
         }
     }
     return energy;

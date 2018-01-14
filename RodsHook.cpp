@@ -5,6 +5,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
     dt = 1e-7;
     damp = 100;
+    project = 1;
     savePrefix = "rod_";
     
     loadName = "torus";
@@ -16,6 +17,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
     viewer.ngui->addVariable("Damping Factor", damp);
+    viewer.ngui->addVariable("Projection Stiffness", project);
     viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
     viewer.ngui->addVariable("Save Prefix", savePrefix);
     
@@ -77,7 +79,8 @@ bool RodsHook::simulateOneStep()
     // update positions
     for (int rod = 0; rod < nrods; rod++)
     {
-        int nverts = config->rods[rod]->numVertices();
+        config->rods[rod]->curState.kproject = project; 
+	int nverts = config->rods[rod]->numVertices();
         int nsegs = config->rods[rod]->numSegments();
         for (int i = 0; i < nsegs; i++)
         {

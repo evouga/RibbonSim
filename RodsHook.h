@@ -70,6 +70,7 @@ private:
 
     double dt;
     double damp;
+    double project;
 
     double iter;
     double forceResidual;
