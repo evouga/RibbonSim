@@ -10,20 +10,19 @@ double projectionEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *
     int nverts = state.centerline.rows();
     int nsegs = rod.isClosed() ? nverts: nverts - 1;
     double energy = 0;
-    for (int i = 0; i < nsegs; i++)
+//    std::cout << rod.curState.closestFaceNormals.rows() << " " << rod.curState.closestFaceCentroids.rows() << " " << "" << "\n";
+    for (int i = 0; i < nverts; i++)
     {
-        Eigen::Vector3d v1 = state.centerline.row(i).transpose();
-        Eigen::Vector3d v2 = state.centerline.row((i+1)%nverts).transpose();
-        double len = (v1 - v2).norm();
-        double restlen = rod.restlens[i];
-        double factor = 0.5 * rod.params.kstretching * rod.widths[i] * rod.params.thickness / restlen;
-        double segenergy = factor * (len - restlen)*(len - restlen);
-        energy += segenergy;
+        Eigen::Vector3d v = state.centerline.row(i).transpose();
+        Eigen::Vector3d c = rod.curState.closestFaceCentroids.row(i);
+	Eigen::Vector3d n = rod.curState.closestFaceNormals.row(i).transpose();
+	
+        Eigen::Vector3d diff = v - c;
+	double d = diff.dot(n);
+        energy += d * d;
         if (dE)
         {
-            Eigen::Vector3d dlen = (v1 - v2) / len;
-            dE->row(i) += 2.0*factor*(len - restlen)*dlen;
-            dE->row((i + 1) % nverts) -= 2.0*factor*(len - restlen)*dlen;
+            dE->row(i) += 2 * d * n.transpose();
         }
     }
     return energy;
@@ -255,6 +254,7 @@ double rodEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, Eig
     if (dthetadw)
         dthetadw->clear();
 
+    double penergy =projectionEnergy(rod, state, dE, dEdw);
     double senergy = stretchingEnergy(rod, state, dE, dEdw);
     double benergy = bendingEnergy(rod, state, dE, dtheta, dEdw, dthetadw);
     double tenergy = twistingEnergy(rod, state, dE, dtheta, dEdw, dthetadw);

@@ -49,7 +49,7 @@ void Rod::updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &
     tree->squared_distance(V, F, curState.centerline, sqrD, closestFaces, c_point);
     curState.closestFaceNormals   = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
     curState.closestFaceCentroids = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
-
+    std::cout << curState.centerline.rows();
     for (int i = 0; i < closestFaces.rows(); i++)
     {
         int faceidx = closestFaces(i);
@@ -104,12 +104,6 @@ RodConfig::~RodConfig()
 void RodConfig::addRod(Rod *rod)
 {
     rods.push_back(rod);
-    if ( hasMesh )
-    {
-        rod->updateProjectionVars( V_mesh, F_mesh );
-        rod->startState.closestFaceNormals = rod->curState.closestFaceNormals;
-        rod->startState.closestFaceCentroids = rod->curState.closestFaceCentroids;
-    }
 }
 
 void RodConfig::addConstraint(Constraint c)
@@ -156,9 +150,12 @@ bool RodConfig::loadTargetMesh(const std::string &objname)
 
     for (int i = 0; i < numRods(); i++)
     {
-        rods[i]->tree = &mesh_tree;
+        rods[i]->tree = &mesh_tree; 
+        rods[i]->updateProjectionVars( V_mesh, F_mesh );
+        rods[i]->startState.closestFaceNormals = rods[i]->curState.closestFaceNormals;
+        rods[i]->startState.closestFaceCentroids = rods[i]->curState.closestFaceCentroids;
     }
-
+    
     return true;
 }
 

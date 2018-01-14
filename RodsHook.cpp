@@ -7,7 +7,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     damp = 100;
     savePrefix = "rod_";
     
-    loadName = "bunny";
+    loadName = "torus";
     refreshLoadBuffers();
 
     viewer.ngui->addVariable("Config File", loadName);
