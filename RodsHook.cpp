@@ -42,9 +42,9 @@ void RodsHook::initSimulation()
     config = readRod(loadBuffer);
     if (!config)
         exit(-1);
-    config->loadTargetMesh(meshBuffer);
+    hasMesh = config->loadTargetMesh(meshBuffer);
+    config->hasMesh = hasMesh;
 
-   
     createVisualizationMesh();
     dirty = true;
 }

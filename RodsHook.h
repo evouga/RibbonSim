@@ -29,7 +29,7 @@ public:
             dirty = false;
         }
         
-        if (showTarget) 
+        if (showTarget && hasMesh) 
 	{
             viewer.data.clear();	    
 	    Eigen::MatrixXd V(renderQ.rows() + config->V_mesh.rows(), renderQ.cols());
@@ -84,6 +84,8 @@ private:
     Eigen::MatrixXd forcePoints;
     Eigen::MatrixXi forceEdges;
     Eigen::MatrixXd forceColors;
+
+    bool hasMesh;
 
     int segsPerEdge;
     Eigen::MatrixXd renderQ;

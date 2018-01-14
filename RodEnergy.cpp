@@ -3,7 +3,33 @@
 #include <iostream>
 #include <Eigen/Sparse>
 
-double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, std::vector<Eigen::Triplet<double> > *dEdw)
+
+
+double projectionEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE)
+{
+    int nverts = state.centerline.rows();
+    int nsegs = rod.isClosed() ? nverts: nverts - 1;
+    double energy = 0;
+    for (int i = 0; i < nsegs; i++)
+    {
+        Eigen::Vector3d v1 = state.centerline.row(i).transpose();
+        Eigen::Vector3d v2 = state.centerline.row((i+1)%nverts).transpose();
+        double len = (v1 - v2).norm();
+        double restlen = rod.restlens[i];
+        double factor = 0.5 * rod.params.kstretching * rod.widths[i] * rod.params.thickness / restlen;
+        double segenergy = factor * (len - restlen)*(len - restlen);
+        energy += segenergy;
+        if (dE)
+        {
+            Eigen::Vector3d dlen = (v1 - v2) / len;
+            dE->row(i) += 2.0*factor*(len - restlen)*dlen;
+            dE->row((i + 1) % nverts) -= 2.0*factor*(len - restlen)*dlen;
+        }
+    }
+    return energy;
+}
+
+double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE)
 {
     int nverts = state.centerline.rows();
     int nsegs = rod.isClosed() ? nverts: nverts - 1;

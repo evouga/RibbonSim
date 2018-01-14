@@ -30,6 +30,38 @@ Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams
     initializeRestQuantities();
 }
 
+
+Eigen::Vector3d faceNormal(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, int faceidx)
+{
+    Eigen::Vector3d p0 = V.row(F(faceidx, 0));
+    Eigen::Vector3d p1 = V.row(F(faceidx, 1));
+    Eigen::Vector3d p2 = V.row(F(faceidx, 2));
+    Eigen::Vector3d n = (p1 - p0).cross(p2 - p0);
+    n /= n.norm();
+    return n;
+}
+
+void Rod::updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
+{
+    Eigen::VectorXd sqrD;
+    Eigen::VectorXi closestFaces;
+    Eigen::MatrixXd c_point;
+    tree->squared_distance(V, F, curState.centerline, sqrD, closestFaces, c_point);
+    curState.closestFaceNormals   = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
+    curState.closestFaceCentroids = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
+
+    for (int i = 0; i < closestFaces.rows(); i++)
+    {
+        int faceidx = closestFaces(i);
+	curState.closestFaceNormals.row(i) = faceNormal( V, F, faceidx );
+	Eigen::Vector3d p0 = V.row(F(faceidx, 0));
+	Eigen::Vector3d p1 = V.row(F(faceidx, 1));
+	Eigen::Vector3d p2 = V.row(F(faceidx, 2));
+	curState.closestFaceCentroids.row(i) = ( p0 + p1 + p2 ) / 3.;
+    }
+
+}
+
 void Rod::initializeRestQuantities()
 {
     int nverts = startState.centerline.rows();
@@ -72,6 +104,12 @@ RodConfig::~RodConfig()
 void RodConfig::addRod(Rod *rod)
 {
     rods.push_back(rod);
+    if ( hasMesh )
+    {
+        rod->updateProjectionVars( V_mesh, F_mesh );
+        rod->startState.closestFaceNormals = rod->curState.closestFaceNormals;
+        rod->startState.closestFaceCentroids = rod->curState.closestFaceCentroids;
+    }
 }
 
 void RodConfig::addConstraint(Constraint c)
@@ -94,18 +132,18 @@ void RodConfig::reset()
     }
 }
 
-void RodConfig::loadTargetMesh(const std::string &objname)
+bool RodConfig::loadTargetMesh(const std::string &objname)
 {
     Eigen::MatrixXd Vtmp;
     if (!igl::read_triangle_mesh(objname, Vtmp, F_mesh))
     {
         std::cerr << "Couldn't load mesh " << objname << std::endl;
-        exit(-1);
+        return false;
     }
     if (Vtmp.cols() < 3)
     {
         std::cerr << "Mesh must 3D" << std::endl;
-        exit(-1);
+        return false;
     }
     V_mesh.resize(Vtmp.rows(), 3);
     //wtf
@@ -113,6 +151,15 @@ void RodConfig::loadTargetMesh(const std::string &objname)
     {
         V_mesh.col(i) = Vtmp.col(i);
     }
+
+    mesh_tree.init(V_mesh, F_mesh);
+
+    for (int i = 0; i < numRods(); i++)
+    {
+        rods[i]->tree = &mesh_tree;
+    }
+
+    return true;
 }
 
 void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)

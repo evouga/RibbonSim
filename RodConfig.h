@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <Eigen/Core>
+#include <igl/AABB.h>
 
 struct RodParams
 {
@@ -20,6 +21,10 @@ struct RodState
     Eigen::VectorXd thetas;
     Eigen::MatrixXd centerlineVel;
     Eigen::VectorXd directorAngVel;
+    
+    // Projection Variables
+    Eigen::MatrixXd closestFaceNormals;
+    Eigen::MatrixXd closestFaceCentroids; 
 };
 
 class Rod
@@ -39,6 +44,9 @@ public:
     Eigen::VectorXd momInertia;
     RodParams params;
 
+    igl::AABB<Eigen::MatrixXd,3> *tree;
+    void updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+     
 private:
     bool isClosed_;
 
@@ -62,7 +70,7 @@ public:
     void addConstraint(Constraint c);
     int numRods() const { return (int)rods.size(); }
     void reset();
-    void loadTargetMesh(const std::string &objname);
+    bool loadTargetMesh(const std::string &objname);
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
     void saveRodGeometry(const std::string &prefix);
 
@@ -72,6 +80,9 @@ public:
     // Target mesh - for optimization 
     Eigen::MatrixXd V_mesh; // |V| x 3
     Eigen::MatrixXi F_mesh; // |F| x 3
+
+    igl::AABB<Eigen::MatrixXd,3> mesh_tree;
+    bool hasMesh;
 };
 
 #endif
