@@ -38,7 +38,7 @@ void RodsHook::initSimulation()
 }
 
 
-void RodsHook::showForces(int rod, const Eigen::MatrixXd &dE)
+void RodsHook::showForces(int rod, const Eigen::VectorXd &dE)
 {
     int nverts = config->rods[rod]->numVertices();
     forcePoints.resize(2*nverts, 3);
@@ -47,7 +47,7 @@ void RodsHook::showForces(int rod, const Eigen::MatrixXd &dE)
     for (int i = 0; i < nverts; i++)
     {
         forcePoints.row(2 * i) = config->rods[rod]->curState.centerline.row(i);
-        forcePoints.row(2 * i+1) = config->rods[rod]->curState.centerline.row(i) - dE.row(i);
+        forcePoints.row(2 * i+1) = config->rods[rod]->curState.centerline.row(i) - dE.segment<3>(3*i).transpose();
         forceEdges(i, 0) = 2 * i;
         forceEdges(i, 1) = 2 * i + 1;
         forceColors.row(i) = Eigen::Vector3d(1, 0, 0);
@@ -84,16 +84,16 @@ bool RodsHook::simulateOneStep()
 
     double newresid = 0;
 
-    std::vector<Eigen::MatrixXd> constraintdE;
+    std::vector<Eigen::VectorXd> constraintdE;
     std::vector<Eigen::VectorXd> constraintdtheta;
     constraintEnergy(*config, &constraintdE, &constraintdtheta);
 
     // update velocities
     for (int rod = 0; rod < nrods; rod++)
     {
-        Eigen::MatrixXd dE;
+        Eigen::VectorXd dE;
         Eigen::VectorXd dtheta;
-        double energy = rodEnergy(*config->rods[rod], config->rods[rod]->curState, &dE, &dtheta);
+        double energy = rodEnergy(*config->rods[rod], config->rods[rod]->curState, &dE, &dtheta, NULL, NULL);
         if (rod == 0)
             showForces(0, dE);
         dE += constraintdE[rod];
@@ -103,17 +103,14 @@ bool RodsHook::simulateOneStep()
         int nsegs = config->rods[rod]->numSegments();
         for (int i = 0; i < nverts; i++)
         {
-            newresid += dE.row(i).squaredNorm() / config->rods[rod]->masses[i];
-            dE.row(i) /= config->rods[rod]->masses[i];            
+            newresid += dE.segment<3>(3*i).squaredNorm() / config->rods[rod]->masses[i];
+            config->rods[rod]->curState.centerlineVel.row(i) -= dt * dE.segment<3>(3*i).transpose() / config->rods[rod]->masses[i];            
         }
         for (int i = 0; i < nsegs; i++)
         {
             newresid += dtheta[i]*dtheta[i] / config->rods[rod]->momInertia[i];
-            dtheta[i] /= config->rods[rod]->momInertia[i];
+            config->rods[rod]->curState.directorAngVel[i] -= dt * dtheta[i] / config->rods[rod]->momInertia[i];
         }
-
-        config->rods[rod]->curState.centerlineVel -= dt*dE;
-        config->rods[rod]->curState.directorAngVel -= dt*dtheta;
 
         double dampfactor = exp(-dt*damp);
         config->rods[rod]->curState.centerlineVel *= dampfactor;
