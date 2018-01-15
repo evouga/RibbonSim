@@ -42,6 +42,11 @@ public:
 	    C << Eigen::RowVector3d(0.2,0.3,0.8).replicate(renderF.rows(),1),
 		 Eigen::RowVector3d(1.0,0.7,0.2).replicate(config->F_mesh.rows(),1);  
 	    viewer.data.set_colors(C);
+
+	    for (int i = 0; i < config->rods.size(); i++)
+	    {
+		viewer.data.add_points( config->rods[i]->c_points, Eigen::RowVector3d(.9,.1,.1));
+	    }
 	}
         else 
 	{
@@ -55,6 +60,7 @@ public:
     }
 
     void saveRods();
+    void project();
     void refreshLoadBuffers(); 
  
 private:    
@@ -70,7 +76,7 @@ private:
 
     double dt;
     double damp;
-    double project;
+    double projectStiffness;
 
     double iter;
     double forceResidual;

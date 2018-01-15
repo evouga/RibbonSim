@@ -47,7 +47,11 @@ public:
     RodParams params;
     igl::AABB<Eigen::MatrixXd,3> *tree;
     void updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
-     
+    
+    Eigen::MatrixXd c_points;
+
+    void projectToMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+
 private:
     bool isClosed_;
 

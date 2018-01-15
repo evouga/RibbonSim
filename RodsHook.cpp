@@ -5,7 +5,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
     dt = 1e-7;
     damp = 100;
-    project = 1;
+    projectStiffness = 1;
     savePrefix = "rod_";
     
     loadName = "torus";
@@ -17,13 +17,15 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addVariable("Time Step", dt);
     viewer.ngui->addVariable("Damping Factor", damp);
-    viewer.ngui->addVariable("Projection Stiffness", project);
+    viewer.ngui->addVariable("Projection Stiffness", projectStiffness);
+    viewer.ngui->addButton("Project to Mesh", std::bind(&RodsHook::project, this));
     viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
     viewer.ngui->addVariable("Save Prefix", savePrefix);
     
     viewer.ngui->addGroup("Sim Status");
     viewer.ngui->addVariable("Iteration", iter, false);
     viewer.ngui->addVariable("Force Residual", forceResidual, false);
+
 }
 
 void RodsHook::refreshLoadBuffers()
@@ -68,6 +70,14 @@ void RodsHook::showForces(int rod, const Eigen::VectorXd &dE)
     }
 }
 
+void RodsHook::project()
+{
+    for( int i = 0; i < config->rods.size(); i++)
+    {
+        config->rods[i]->projectToMesh(config->V_mesh, config->F_mesh);
+    }
+}
+
 void RodsHook::createVisualizationMesh()
 {
     config->createVisualizationMesh(Q, F);
@@ -79,7 +89,7 @@ bool RodsHook::simulateOneStep()
     // update positions
     for (int rod = 0; rod < nrods; rod++)
     {
-        config->rods[rod]->curState.kproject = project; 
+        config->rods[rod]->curState.kproject = projectStiffness; 
 	int nverts = config->rods[rod]->numVertices();
         int nsegs = config->rods[rod]->numSegments();
         for (int i = 0; i < nsegs; i++)
