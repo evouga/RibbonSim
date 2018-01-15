@@ -26,15 +26,6 @@ double projectionEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *
         {
             dE->segment<3>(3 * i) += 2 * stiffness * d * n.transpose();
         }
-/*        if (dEdw)
-        {
-            Eigen::Vector3d dlen = (v1 - v2) / len;
-            for (int j = 0; j < 3; j++)
-            {
-                dEdw->push_back(Eigen::Triplet<double>(3 * i + j, i, 2.0*factor* (len - restlen)*dlen[j]));
-                dEdw->push_back(Eigen::Triplet<double>(3 * (i + 1) + j, i, -2.0*factor * (len - restlen)*dlen[j]));
-            }
-        }   */
     }
     return energy;
 }
@@ -51,13 +42,13 @@ double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *
         double len = (v1 - v2).norm();
         double restlen = rod.restlens[i];
         double factor = 0.5 * rod.params.kstretching * rod.params.thickness / restlen;
-        double segenergy = factor * rod.widths[i] * (len - restlen)*(len - restlen);
+        double segenergy = factor * rod.curState.widths[i] * (len - restlen)*(len - restlen);
         energy += segenergy;
         if (dE)
         {
             Eigen::Vector3d dlen = (v1 - v2) / len;
-            dE->segment<3>(3 * i) += 2.0*factor*rod.widths[i] * (len - restlen)*dlen;
-            dE->segment<3>(3 * ((i + 1) % nverts)) -= 2.0*factor*rod.widths[i] * (len - restlen)*dlen;
+            dE->segment<3>(3 * i) += 2.0*factor*rod.curState.widths[i] * (len - restlen)*dlen;
+            dE->segment<3>(3 * ((i + 1) % nverts)) -= 2.0*factor*rod.curState.widths[i] * (len - restlen)*dlen;
         }
         if (dEdw)
         {
@@ -99,7 +90,7 @@ double bendingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE,
         double k1 = 0.5*(d21 + d22).dot(kb);
         double k2 = 0.5*(d11 + d12).dot(kb);
         double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
-        double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+        double width = 0.5*(rod.curState.widths[(nsegs + i - 1) % nsegs] + rod.curState.widths[i]);
         double factor1 = 0.5*rod.params.kbending*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
         double factor2 = 0.5*rod.params.kbending*rod.params.thickness / len;
         double vertenergy = factor1*width*k1*k1 + factor2*width*width*width*k2*k2;
@@ -207,7 +198,7 @@ double twistingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE
         Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, v2 - v1);
         double theta = angle(d1t, d2, t12);
         double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
-        double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+        double width = 0.5*(rod.curState.widths[(nsegs + i - 1) % nsegs] + rod.curState.widths[i]);
         double factor = 0.5*rod.params.ktwist*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
         energy += factor*theta*theta;
         if (dE)
@@ -272,18 +263,6 @@ double rodEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, Eig
     return senergy + benergy + tenergy;
 }
 
-Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
-{
-    Eigen::Vector3d t1 = e1 / e1.norm();
-    Eigen::Vector3d t2 = e2 / e2.norm();
-    Eigen::Vector3d n = t1.cross(t2);
-    if (n.norm() < 1e-8)
-        return v;
-    n /= n.norm();
-    Eigen::Vector3d p1 = n.cross(t1);
-    Eigen::Vector3d p2 = n.cross(t2);
-    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
-}
 
 double positionConstraintEnergy(RodConfig &config, std::vector<Eigen::VectorXd> *dEs)
 {

@@ -111,14 +111,14 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
             Eigen::Vector3d v1 = rods[rod]->curState.centerline.row((i + 1) % nverts);
             Eigen::Vector3d T = v1 - v0;
             T /= T.norm();
-            Q.row(offset + 8 * i + 0) = (v0.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 1) = (v0.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 2) = (v0.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 3) = (v0.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 4) = (v1.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 5) = (v1.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 6) = (v1.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(offset + 8 * i + 7) = (v1.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 0) = (v0.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 1) = (v0.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 2) = (v0.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 3) = (v0.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 4) = (v1.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 5) = (v1.transpose() + rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 6) = (v1.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(offset + 8 * i + 7) = (v1.transpose() - rods[rod]->params.thickness / 2.0 * N.row(i) - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
             for (int j = 0; j < 4; j++)
             {
                 F(offset + 8 * i + 2 * j, 0) = offset + 8 * i + j;
@@ -171,10 +171,10 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
                 weight = 1.0;
             else weight = 0.5;
 
-            Q.row(2 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 0) = (v0.transpose() - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 1) = (v0.transpose() + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 2) = (v1.transpose() - rods[rod]->curState.widths[i] / 2.0 * B.row(i));
+            Q.row(2 * i + 3) = (v1.transpose() + rods[rod]->curState.widths[i] / 2.0 * B.row(i));
             
             F(2 * i + 0, 0) = 2 * i + 0;
             F(2 * i + 0, 1) = 2 * i + 1;

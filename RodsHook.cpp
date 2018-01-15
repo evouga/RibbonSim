@@ -6,6 +6,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     dt = 1e-7;
     damp = 100;
     projectStiffness = 1;
+    toProject = false;
     savePrefix = "rod_";
     
     loadName = "torus";
@@ -72,10 +73,7 @@ void RodsHook::showForces(int rod, const Eigen::VectorXd &dE)
 
 void RodsHook::project()
 {
-    for( int i = 0; i < config->rods.size(); i++)
-    {
-        config->rods[i]->projectToMesh(config->V_mesh, config->F_mesh);
-    }
+    toProject = true;
 }
 
 void RodsHook::createVisualizationMesh()
@@ -143,6 +141,15 @@ bool RodsHook::simulateOneStep()
     }
     forceResidual = newresid;
     iter++;
+    if (toProject)
+    {
+	for( int i = 0; i < config->rods.size(); i++)
+	{
+	    config->rods[i]->projectToMesh(config->V_mesh, config->F_mesh);
+	}
+	toProject = false;
+    }
+ 
     /*
     if (iter == 10000)
     {

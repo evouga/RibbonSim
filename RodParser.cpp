@@ -80,8 +80,9 @@ RodConfig *readRod(const char *filename)
         for (int i = 0; i < nsegs; i++)
         {
             ifs >> widths[i];
-        }        
-        Rod *r = new Rod(rs, widths, params, isclosed);
+        }       
+        rs.widths = widths;	
+        Rod *r = new Rod(rs, params, isclosed);
         ret->addRod(r);
     }
     for (int i = 0; i < nconstraints; i++)

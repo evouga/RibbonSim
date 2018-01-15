@@ -22,17 +22,21 @@ struct RodState
     Eigen::VectorXd thetas;
     Eigen::MatrixXd centerlineVel;
     Eigen::VectorXd directorAngVel;
-    
+   
+    Eigen::VectorXd widths;
+
     // Projection Variables
     Eigen::MatrixXd closestFaceNormals;
     Eigen::MatrixXd closestFaceCentroids; 
     double kproject; 
 };
 
+Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2);
+
 class Rod
 {
 public:
-    Rod(const RodState &startState, const Eigen::VectorXd &widths, RodParams &params, bool isClosed);
+    Rod(const RodState &startState, RodParams &params, bool isClosed);
 
     bool isClosed() const { return isClosed_; }
     int numVertices() const { return (int)curState.centerline.rows(); }
@@ -40,14 +44,15 @@ public:
     RodState curState;
     RodState startState;
 
-    Eigen::VectorXd widths;
-    Eigen::VectorXd restlens;
-    Eigen::VectorXd masses;
-    Eigen::VectorXd momInertia;
     RodParams params;
     igl::AABB<Eigen::MatrixXd,3> *tree;
     void updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
-    
+
+// Material parameters - recompute after reset!
+    Eigen::VectorXd restlens;
+    Eigen::VectorXd masses;
+    Eigen::VectorXd momInertia;
+
     Eigen::MatrixXd c_points;
 
     void projectToMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);

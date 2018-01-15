@@ -77,6 +77,7 @@ private:
     double dt;
     double damp;
     double projectStiffness;
+    bool toProject;
 
     double iter;
     double forceResidual;

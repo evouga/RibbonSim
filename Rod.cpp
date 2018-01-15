@@ -8,7 +8,7 @@
 #include <Eigen/Geometry>
 
 
-Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
+Rod::Rod(const RodState &startState, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
 {
     int nverts = startState.centerline.rows();
     int nsegs = isClosed ? nverts : nverts - 1;
@@ -27,7 +27,6 @@ Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams
         assert(fabs(dotprod) < 1e-6);
     }
     curState = startState;
-    widths = segwidths;
     initializeRestQuantities();
 }
 
@@ -41,6 +40,20 @@ Eigen::Vector3d faceNormal(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, i
     n /= n.norm();
     return n;
 }
+
+Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3d &e1, const Eigen::Vector3d &e2)
+{
+    Eigen::Vector3d t1 = e1 / e1.norm();
+    Eigen::Vector3d t2 = e2 / e2.norm();
+    Eigen::Vector3d n = t1.cross(t2);
+    if (n.norm() < 1e-8)
+        return v;
+    n /= n.norm();
+    Eigen::Vector3d p1 = n.cross(t1);
+    Eigen::Vector3d p2 = n.cross(t2);
+    return v.dot(n)*n + v.dot(t1)*t2 + v.dot(p1)*p2;
+}
+
 
 void Rod::updateProjectionVars(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
 {
@@ -72,11 +85,25 @@ void Rod::projectToMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
     curState.closestFaceNormals   = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
     curState.closestFaceCentroids = Eigen::MatrixXd::Zero(closestFaces.rows(), 3);
     
-    c_points = c_point;
-/*
+
     int nverts = curState.centerline.rows();
     int nsegs = isClosed() ? nverts : nverts - 1;
-    restlens.resize(nsegs);
+   
+    curState.centerlineVel.setZero();
+    curState.directorAngVel.setZero();
+ //   curState.thetas.setZero();
+    for (int i = 0; i < nsegs; i++)
+    { 
+	Eigen::Vector3d oldv1 = curState.centerline.row(i);
+	Eigen::Vector3d oldv2 = curState.centerline.row((i + 1) % nverts);
+	Eigen::Vector3d v1 = c_point.row(i);
+	Eigen::Vector3d v2 = c_point.row((i + 1) % nverts);
+        curState.directors.row(i) = parallelTransport(curState.directors.row(i), oldv2 - oldv1, v2 - v1); 
+    }
+
+    c_points = c_point; // for visualization
+    curState.centerline = c_point;
+
     for (int i = 0; i < nsegs; i++)
     {
         Eigen::Vector3d v1 = curState.centerline.row(i).transpose();
@@ -90,7 +117,7 @@ void Rod::projectToMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
     for (int i = 0; i < nsegs; i++)
     {
         double len = restlens[i];
-        double totmass = widths[i]*params.thickness*len*params.rho;
+        double totmass = curState.widths[i]*params.thickness*len*params.rho;
         masses[i] += totmass / 2.0;
         masses[(i + 1)%nverts] += totmass / 2.0;
     }
@@ -99,11 +126,10 @@ void Rod::projectToMesh(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
     for (int i = 0; i < nsegs; i++)
     {
         double len = restlens[i];
-        double mass = widths[i]*params.thickness*len*params.rho;
-        momInertia[i] = mass / 12.0 * (widths[i]*widths[i] + params.thickness*params.thickness);
+        double mass = curState.widths[i]*params.thickness*len*params.rho;
+        momInertia[i] = mass / 12.0 * (curState.widths[i]*curState.widths[i] + params.thickness*params.thickness);
     }
 
-    */
 }
 
 void Rod::initializeRestQuantities()
@@ -124,7 +150,7 @@ void Rod::initializeRestQuantities()
     for (int i = 0; i < nsegs; i++)
     {
         double len = restlens[i];
-        double totmass = widths[i]*params.thickness*len*params.rho;
+        double totmass = startState.widths[i]*params.thickness*len*params.rho;
         masses[i] += totmass / 2.0;
         masses[(i + 1)%nverts] += totmass / 2.0;
     }
@@ -133,8 +159,8 @@ void Rod::initializeRestQuantities()
     for (int i = 0; i < nsegs; i++)
     {
         double len = restlens[i];
-        double mass = widths[i]*params.thickness*len*params.rho;
-        momInertia[i] = mass / 12.0 * (widths[i]*widths[i] + params.thickness*params.thickness);
+        double mass = startState.widths[i]*params.thickness*len*params.rho;
+        momInertia[i] = mass / 12.0 * (startState.widths[i]*startState.widths[i] + params.thickness*params.thickness);
     }
 }
 
