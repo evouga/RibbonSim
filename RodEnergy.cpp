@@ -5,7 +5,7 @@
 
 
 
-double projectionEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE)
+double projectionEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, std::vector<Eigen::Triplet<double> > *dEdw)
 {
     int nverts = state.centerline.rows();
     int nsegs = rod.isClosed() ? nverts: nverts - 1;
@@ -17,19 +17,29 @@ double projectionEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *
         Eigen::Vector3d c = rod.curState.closestFaceCentroids.row(i);
 	Eigen::Vector3d n = rod.curState.closestFaceNormals.row(i).transpose();
 	
-        Eigen::Vector3d diff = c - v;
+        Eigen::Vector3d diff = v - c;
 	double d = diff.dot(n);
 	double stiffness = rod.curState.kproject;
         energy += stiffness * d * d;
+
         if (dE)
         {
-            dE->row(i) -= 2 * stiffness * d * n.transpose();
+            dE->segment<3>(3 * i) += 2 * stiffness * d * n.transpose();
         }
+/*        if (dEdw)
+        {
+            Eigen::Vector3d dlen = (v1 - v2) / len;
+            for (int j = 0; j < 3; j++)
+            {
+                dEdw->push_back(Eigen::Triplet<double>(3 * i + j, i, 2.0*factor* (len - restlen)*dlen[j]));
+                dEdw->push_back(Eigen::Triplet<double>(3 * (i + 1) + j, i, -2.0*factor * (len - restlen)*dlen[j]));
+            }
+        }   */
     }
     return energy;
 }
 
-double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::MatrixXd *dE)
+double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, std::vector<Eigen::Triplet<double> > *dEdw)
 {
     int nverts = state.centerline.rows();
     int nsegs = rod.isClosed() ? nverts: nverts - 1;
