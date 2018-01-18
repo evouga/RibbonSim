@@ -41,9 +41,6 @@ private:
 
     std::string loadName;
 
-    double dt;
-    double damp;
-
     double iter;
     double forceResidual;
     

@@ -3,16 +3,12 @@
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
-    dt = 1e-7;
-    damp = 100;
     savePrefix = "rod_";
     loadName = "../configs/torus.rod";
 
     viewer.ngui->addVariable("Config File", loadName);
 
     viewer.ngui->addGroup("Sim Options");
-    viewer.ngui->addVariable("Time Step", dt);
-    viewer.ngui->addVariable("Damping Factor", damp);
     viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
     viewer.ngui->addVariable("Save Prefix", savePrefix);
     
@@ -35,23 +31,6 @@ void RodsHook::initSimulation()
    
     createVisualizationMesh();
     dirty = true;
-}
-
-
-void RodsHook::showForces(int rod, const Eigen::VectorXd &dE)
-{
-    int nverts = config->rods[rod]->numVertices();
-    forcePoints.resize(2*nverts, 3);
-    forceEdges.resize(nverts, 2);
-    forceColors.resize(nverts, 3);
-    for (int i = 0; i < nverts; i++)
-    {
-        forcePoints.row(2 * i) = config->rods[rod]->curState.centerline.row(i);
-        forcePoints.row(2 * i+1) = config->rods[rod]->curState.centerline.row(i) - dE.segment<3>(3*i).transpose();
-        forceEdges(i, 0) = 2 * i;
-        forceEdges(i, 1) = 2 * i + 1;
-        forceColors.row(i) = Eigen::Vector3d(1, 0, 0);
-    }
 }
 
 void RodsHook::createVisualizationMesh()
@@ -148,9 +127,6 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
 
 bool RodsHook::simulateOneStep()
 {
-    //config->rods[0]->params.kstretching = 0;
-    //config->rods[0]->params.ktwist = 0;
-    //config->rods[0]->params.kbending = 0;
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> Jr;
     rAndJ(*config, r, &Jr);
@@ -170,9 +146,12 @@ bool RodsHook::simulateOneStep()
     std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
     lineSearch(*config, delta);
 
-    createVisualizationMesh();    
+    rAndJ(*config, r, NULL);
 
-    double newresid = 0;
+    forceResidual = 0.5 * r.squaredNorm();
+    iter++;
+
+    createVisualizationMesh();    
 
     return false;
 }
