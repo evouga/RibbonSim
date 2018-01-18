@@ -59,93 +59,120 @@ void RodsHook::createVisualizationMesh()
     config->createVisualizationMesh(Q, F);
 }
 
+double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
+{
+    double t = 1.0;
+    double c1 = 0.1;
+    double c2 = 0.9;
+    double alpha = 0;
+    double infinity = 1e6;
+    double beta = infinity;
+
+    Eigen::VectorXd r;
+    Eigen::SparseMatrix<double> J;
+    rAndJ(config, r, &J);
+    
+    Eigen::VectorXd dE;
+    Eigen::VectorXd newdE;
+    std::vector<RodState> start;
+    for (int i = 0; i < config.numRods(); i++)
+        start.push_back(config.rods[i]->curState);
+    
+    double orig = 0.5 * r.squaredNorm();
+    dE = J.transpose() * r;
+    double deriv = -dE.dot(update);
+    assert(deriv < 0);
+
+    std::cout << "Starting line search, original energy " << orig << ", descent magnitude " << deriv << std::endl;
+
+    while (true)
+    {
+        int nrods = config.numRods();
+        int dofoffset = 0;
+        for (int rod = 0; rod < nrods; rod++)
+        {
+            int nverts = config.rods[rod]->numVertices();
+            int nsegs = config.rods[rod]->numSegments();
+            for (int i = 0; i < nsegs; i++)
+            {
+                Eigen::Vector3d oldv1 =start[rod].centerline.row(i);
+                Eigen::Vector3d oldv2 = start[rod].centerline.row((i + 1) % nverts);
+                Eigen::Vector3d v1 = oldv1 - t * update.segment<3>(dofoffset + 3 * i);
+                Eigen::Vector3d v2 = oldv2 - t * update.segment<3>(dofoffset + 3 * ((i + 1) % nverts));
+
+                config.rods[rod]->curState.directors.row(i) = parallelTransport(start[rod].directors.row(i), oldv2 - oldv1, v2 - v1);
+            }
+            for (int i = 0; i < nverts; i++)
+                config.rods[rod]->curState.centerline.row(i) = start[rod].centerline.row(i) - t * update.segment<3>(dofoffset + 3 * i).transpose();
+            for (int i = 0; i < nsegs; i++)
+                config.rods[rod]->curState.thetas[i] = start[rod].thetas[i] - t * update[dofoffset + 3 * nverts + i];
+
+            dofoffset += 3 * nverts + 2 * nsegs;
+        }
+        
+        rAndJ(config, r, &J);
+
+        double newenergy = 0.5 * r.squaredNorm();
+        newdE = J.transpose() * r;
+
+        std::cout << "Trying t = " << t << ", energy now " << newenergy << std::endl;
+
+        if (std::isnan(newenergy) || newenergy > orig + t*deriv*c1)
+        {
+            beta = t;
+            t = 0.5*(alpha + beta);
+        }
+        else if (-newdE.dot(update) < c2*deriv)
+        {
+            alpha = t;
+            if (beta == infinity)
+            {
+                t = 2 * alpha;
+            }
+            else
+            {
+                t = 0.5*(alpha + beta);
+            }
+
+            if (beta - alpha < 1e-8)
+            {
+                return t;
+            }
+        }
+        else
+        {
+            return t;
+        }
+    }
+}
+
 bool RodsHook::simulateOneStep()
 {
-    int nrods = config->numRods();
-    // update positions
-    for (int rod = 0; rod < nrods; rod++)
-    {
-        int nverts = config->rods[rod]->numVertices();
-        int nsegs = config->rods[rod]->numSegments();
-        for (int i = 0; i < nsegs; i++)
-        {
-            Eigen::Vector3d oldv1 = config->rods[rod]->curState.centerline.row(i);
-            Eigen::Vector3d oldv2 = config->rods[rod]->curState.centerline.row((i + 1) % nverts);
-            Eigen::Vector3d v1 = oldv1 + dt*config->rods[rod]->curState.centerlineVel.row(i).transpose();
-            Eigen::Vector3d v2 = oldv2 + dt*config->rods[rod]->curState.centerlineVel.row((i + 1) % nverts).transpose();
+    //config->rods[0]->params.kstretching = 0;
+    //config->rods[0]->params.ktwist = 0;
+    //config->rods[0]->params.kbending = 0;
+    Eigen::VectorXd r;
+    Eigen::SparseMatrix<double> Jr;
+    rAndJ(*config, r, &Jr);
 
-            config->rods[rod]->curState.directors.row(i) = parallelTransport(config->rods[rod]->curState.directors.row(i), oldv2 - oldv1, v2 - v1);
-        }
-        config->rods[rod]->curState.centerline += dt*config->rods[rod]->curState.centerlineVel;
-        config->rods[rod]->curState.thetas += dt*config->rods[rod]->curState.directorAngVel;
-    }
+    std::cout << "Orig energy: " << r.squaredNorm() << std::endl;
+    Eigen::SparseMatrix<double> mat = Jr.transpose() * Jr;
+    Eigen::SparseMatrix<double> I(mat.rows(), mat.cols());
+    I.setIdentity();    
+    double reg = 1e-6;
+    mat += reg*I;
+
+    Eigen::VectorXd rhs = Jr.transpose() * r;
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(mat);
+    Eigen::VectorXd delta = solver.solve(rhs);
+    if (solver.info() != Eigen::Success)
+        exit(-1);
+    std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
+    lineSearch(*config, delta);
 
     createVisualizationMesh();    
 
     double newresid = 0;
-
-    std::vector<Eigen::VectorXd> constraintdE;
-    std::vector<Eigen::VectorXd> constraintdtheta;
-    constraintEnergy(*config, &constraintdE, &constraintdtheta);
-
-    // update velocities
-    for (int rod = 0; rod < nrods; rod++)
-    {
-        Eigen::VectorXd dE;
-        Eigen::VectorXd dtheta;
-        double energy = rodEnergy(*config->rods[rod], config->rods[rod]->curState, &dE, &dtheta, NULL, NULL);
-        if (rod == 0)
-            showForces(0, dE);
-        dE += constraintdE[rod];
-        dtheta += constraintdtheta[rod];
-
-        int nverts = config->rods[rod]->numVertices();
-        int nsegs = config->rods[rod]->numSegments();
-        for (int i = 0; i < nverts; i++)
-        {
-            newresid += dE.segment<3>(3*i).squaredNorm() / config->rods[rod]->masses[i];
-            config->rods[rod]->curState.centerlineVel.row(i) -= dt * dE.segment<3>(3*i).transpose() / config->rods[rod]->masses[i];            
-        }
-        for (int i = 0; i < nsegs; i++)
-        {
-            newresid += dtheta[i]*dtheta[i] / config->rods[rod]->momInertia[i];
-            config->rods[rod]->curState.directorAngVel[i] -= dt * dtheta[i] / config->rods[rod]->momInertia[i];
-        }
-
-        double dampfactor = exp(-dt*damp);
-        config->rods[rod]->curState.centerlineVel *= dampfactor;
-        config->rods[rod]->curState.directorAngVel *= dampfactor;        
-    }
-    forceResidual = newresid;
-    iter++;
-    /*
-    if (iter == 10000)
-    {
-        config->rods[0]->params.kstretching = 0;
-        double energy = rodEnergy(*config->rods[0], config->rods[0]->curState, NULL, NULL);
-        for (int i = 0; i < config->rods[0]->numVertices(); i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                RodState cp = config->rods[0]->curState;
-                cp.centerline(i, j) += 1e-6;
-                Eigen::MatrixXd dE;
-                double newenergy = rodEnergy(*config->rods[0], cp, &dE, NULL);
-                double findiff = (newenergy - energy) / 1e-6;
-                std::cout << findiff << " " << dE(i, j) << std::endl;
-            }
-        }
-        for (int i = 0; i < config->rods[0]->numSegments(); i++)
-        {
-            RodState cp = config->rods[0]->curState;
-            cp.thetas[i] += 1e-6;
-            Eigen::VectorXd dtheta;
-            double newenergy = rodEnergy(*config->rods[0], cp, NULL, &dtheta);
-            double findiff = (newenergy - energy) / 1e-6;
-            std::cout << findiff << " " << dtheta[i] << std::endl;
-        }
-        while (true);
-    }*/
 
     return false;
 }

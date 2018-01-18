@@ -5,6 +5,8 @@
 #include <Eigen/Sparse>
 #include "RodConfig.h"
 
+void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *Jr);
+
 double rodEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, Eigen::VectorXd *dtheta, std::vector<Eigen::Triplet<double> > *dEdw, std::vector<Eigen::Triplet<double> > *dthetadw);
 double constraintEnergy(RodConfig &config, std::vector<Eigen::VectorXd> *dEs, std::vector<Eigen::VectorXd> *dthetas);
 

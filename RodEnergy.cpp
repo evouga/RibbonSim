@@ -2,6 +2,195 @@
 #include <Eigen/Geometry>
 #include <iostream>
 #include <Eigen/Sparse>
+#include <fstream>
+
+double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::Vector3d &axis)
+{
+    double result =  2.0 * atan2((v1.cross(v2)).dot(axis), v1.norm()*v2.norm() + v1.dot(v2));
+    return result;
+}
+
+void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *Jr)
+{
+    int nterms = 0;
+    int ndofs = 0;
+    for (int i = 0; i < config.numRods(); i++)
+    {
+        ndofs += 3 * config.rods[i]->numVertices() + 2 * config.rods[i]->numSegments();
+        int njoints = config.rods[i]->isClosed() ? config.rods[i]->numSegments() : config.rods[i]->numSegments() - 1;
+        nterms += config.rods[i]->numSegments() + 3 * njoints;
+    }
+
+    r.resize(nterms);
+    r.setConstant(std::numeric_limits<double>::infinity());
+
+    if (Jr)
+    {
+        Jr->resize(nterms, ndofs);
+    }
+
+    std::vector<Eigen::Triplet<double> > J;
+
+    int roffset = 0;
+    int dofoffset = 0;
+    for (int rodidx = 0; rodidx < config.numRods(); rodidx++)
+    {
+        RodState &state = config.rods[rodidx]->curState;
+        Rod &rod = *config.rods[rodidx];
+        int nverts = state.centerline.rows();
+        int nsegs = rod.numSegments();
+        int thetaoffset = 3 * rod.numVertices();
+        int woffset = 3 * rod.numVertices() + rod.numSegments();
+
+        // stretching terms
+      
+        for (int i = 0; i < nsegs; i++)
+        {
+            Eigen::Vector3d v1 = state.centerline.row(i).transpose();
+            Eigen::Vector3d v2 = state.centerline.row((i + 1) % nverts).transpose();
+            double len = (v1 - v2).norm();
+            double restlen = rod.restlens[i];
+            double factor = 0.5 * rod.params.kstretching * rod.params.thickness / restlen;
+            double segr = sqrt(factor * rod.widths[i]) * (len - restlen);
+            r[roffset + i] = segr;
+
+            if (Jr)
+            {
+                Eigen::Vector3d dlen = (v1 - v2) / len;
+                for (int j = 0; j < 3; j++)
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * i + j, sqrt(factor*rod.widths[i])*dlen[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * ((i + 1) % nverts) + j, -sqrt(factor*rod.widths[i])*dlen[j]));
+                }
+                //J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + woffset + i, 0.5*sqrt(factor) / sqrt(rod.widths[i]) * (len - restlen)));
+            }
+        }
+
+        roffset += rod.numSegments();
+
+        // bending terms
+        int startseg = rod.isClosed() ? 0 : 1;
+        int idx = 0;
+        for (int i = startseg; i < nsegs; i++)
+        {
+            Eigen::Vector3d v0 = state.centerline.row((nverts + i - 1) % nverts).transpose();
+            Eigen::Vector3d v1 = state.centerline.row(i).transpose();
+            Eigen::Vector3d v2 = state.centerline.row((i + 1) % nverts).transpose();
+            Eigen::Vector3d t01 = (v1 - v0) / (v1 - v0).norm();
+            Eigen::Vector3d t12 = (v2 - v1) / (v2 - v1).norm();
+            Eigen::Vector3d kb = 2.0*t01.cross(t12) / (1.0 + t01.dot(t12));
+            Eigen::Vector3d db11 = state.directors.row((nsegs + i - 1) % nsegs);
+            Eigen::Vector3d db21 = t01.cross(db11);
+            Eigen::Vector3d db12 = state.directors.row(i);
+            Eigen::Vector3d db22 = t12.cross(db12);
+            double theta1 = state.thetas[(nsegs + i - 1) % nsegs];
+            double theta2 = state.thetas[i];
+            Eigen::Vector3d d11 = db11*cos(theta1) + db21*sin(theta1);
+            Eigen::Vector3d d21 = -db11*sin(theta1) + db21*cos(theta1);
+            Eigen::Vector3d d12 = db12*cos(theta2) + db22*sin(theta2);
+            Eigen::Vector3d d22 = -db12*sin(theta2) + db22*cos(theta2);
+            double k1 = 0.5*(d21 + d22).dot(kb);
+            double k2 = 0.5*(d11 + d12).dot(kb);
+            double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
+            double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+            double factor1 = 0.5*rod.params.kbending*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
+            double factor2 = 0.5*rod.params.kbending*rod.params.thickness / len;
+            double vertr1 = sqrt(factor1*width)*k1;
+            double vertr2 = sqrt(factor2*width*width*width)*k2;
+            r[roffset + 2 * idx] = vertr1;
+            r[roffset + 2 * idx + 1] = vertr2;
+            if (Jr)
+            {
+                Eigen::Vector3d ttilde = (t01 + t12) / (1.0 + t01.dot(t12));
+                Eigen::Vector3d d1tilde = (d11 + d12) / (1.0 + t01.dot(t12));
+                Eigen::Vector3d d2tilde = (d21 + d22) / (1.0 + t01.dot(t12));
+                Eigen::Vector3d dk11 = 1.0 / (v1-v0).norm() * (-k1 * ttilde + t12.cross(d2tilde));
+                Eigen::Vector3d dk12 = 1.0 / (v2-v1).norm() * (-k1 * ttilde - t01.cross(d2tilde));
+                for (int j = 0; j < 3; j++)
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor1*width) * dk11[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * i + j, sqrt(factor1*width) * dk11[j] - sqrt(factor1*width) * dk12[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor1*width) * dk12[j]));
+                }
+                Eigen::Vector3d dk21 = 1.0 / (v1-v0).norm() * (-k2 * ttilde + t12.cross(d1tilde));
+                Eigen::Vector3d dk22 = 1.0 / (v2-v1).norm() * (-k2 * ttilde - t01.cross(d1tilde));
+                for (int j = 0; j < 3; j++)
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor2*width*width*width) * dk21[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * i + j, sqrt(factor2*width*width*width) * dk21[j] - sqrt(factor2*width*width*width) * dk22[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor2*width*width*width) * dk22[j]));
+                }           
+
+                Eigen::Vector3d Dd11 = -db11*sin(theta1) + db21*cos(theta1);
+                Eigen::Vector3d Dd21 = -db11*cos(theta1) - db21*sin(theta1);
+                Eigen::Vector3d Dd12 = -db12*sin(theta2) + db22*cos(theta2);
+                Eigen::Vector3d Dd22 = -db12*cos(theta2) - db22*sin(theta2);
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor1*width) * Dd21.dot(kb)));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor2*width*width*width) * Dd11.dot(kb)));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + i, 0.5*sqrt(factor1*width) * Dd22.dot(kb)));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + i, 0.5*sqrt(factor2*width*width*width) * Dd12.dot(kb)));            
+            
+                /*J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + i, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + (nsegs + i - 1) % nsegs, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));
+                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + i, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));*/
+            }
+            idx++;
+        }
+
+        roffset += 2 * idx;
+
+        idx = 0;
+        for (int i = startseg; i < nsegs; i++)
+        {
+            Eigen::Vector3d v0 = state.centerline.row((nverts + i - 1) % nverts).transpose();
+            Eigen::Vector3d v1 = state.centerline.row(i).transpose();
+            Eigen::Vector3d v2 = state.centerline.row((i + 1) % nverts).transpose();
+            Eigen::Vector3d t01 = (v1 - v0) / (v1 - v0).norm();
+            Eigen::Vector3d t12 = (v2 - v1) / (v2 - v1).norm();
+            Eigen::Vector3d kb = 2.0*t01.cross(t12) / (1.0 + t01.dot(t12));
+            Eigen::Vector3d db11 = state.directors.row((nsegs + i - 1) % nsegs);
+            Eigen::Vector3d db21 = t01.cross(db11);
+            Eigen::Vector3d db12 = state.directors.row(i);
+            Eigen::Vector3d db22 = t12.cross(db12);
+            double theta1 = state.thetas[(nsegs + i - 1) % nsegs];
+            double theta2 = state.thetas[i];
+            Eigen::Vector3d d1 = db11*cos(theta1) + db21*sin(theta1);
+            Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
+            Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, v2 - v1);
+            double theta = angle(d1t, d2, t12);
+            double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
+            double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
+            double factor = 0.5*rod.params.ktwist*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
+            r[roffset + idx] = sqrt(factor*width)*theta;
+            if (Jr)
+            {
+                Eigen::Vector3d dtheta1 = 0.5*kb / (v1 - v0).norm();
+                Eigen::Vector3d dtheta2 = 0.5*kb / (v2 - v1).norm();
+                for (int j = 0; j < 3; j++)
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor*width)*dtheta1[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * i + j, sqrt(factor*width)*dtheta1[j] - sqrt(factor*width)*dtheta2[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor*width)*dtheta2[j]));
+                }            
+            
+                J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, -sqrt(factor*width)));
+                J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + i, sqrt(factor*width)));
+
+                //J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
+                //J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + i, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
+            }
+            idx++;
+        }
+
+        roffset += idx;
+
+        dofoffset += 3 * rod.numVertices() + 2 * rod.numSegments();
+    }
+
+    if (Jr)
+        Jr->setFromTriplets(J.begin(), J.end());
+}
 
 double stretchingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, std::vector<Eigen::Triplet<double> > *dEdw)
 {
@@ -140,11 +329,6 @@ double bendingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE,
     return energy;
 }
 
-double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::Vector3d &axis)
-{
-    double result =  2.0 * atan2((v1.cross(v2)).dot(axis), v1.norm()*v2.norm() + v1.dot(v2));
-    return result;
-}
 
 double twistingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, Eigen::VectorXd *dtheta, std::vector<Eigen::Triplet<double> > *dEdw, std::vector<Eigen::Triplet<double> > *dthetadw)
 {
@@ -173,7 +357,7 @@ double twistingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE
         double len = 0.5*(rod.restlens[(nsegs + i - 1) % nsegs] + rod.restlens[i]);
         double width = 0.5*(rod.widths[(nsegs + i - 1) % nsegs] + rod.widths[i]);
         double factor = 0.5*rod.params.ktwist*rod.params.thickness*rod.params.thickness*rod.params.thickness / len;
-        energy += factor*theta*theta;
+        energy += factor*width*theta*theta;
         if (dE)
         {
             Eigen::Vector3d dtheta1 = 0.5*kb / (v1 - v0).norm();
@@ -210,6 +394,15 @@ double twistingEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE
         }
     }
     return energy;
+}
+
+int rodRs(const Rod &rod)
+{
+    int terms = rod.numSegments(); // stretching terms
+    int njoints = rod.isClosed() ? rod.numSegments() : rod.numSegments() - 1;
+    terms += 2 * njoints; // bending terms
+    terms += njoints; // twisting terms
+    return terms;
 }
 
 double rodEnergy(const Rod &rod, const RodState &state, Eigen::VectorXd *dE, Eigen::VectorXd *dtheta, std::vector<Eigen::Triplet<double> > *dEdw, std::vector<Eigen::Triplet<double> > *dthetadw)
@@ -250,7 +443,6 @@ Eigen::Vector3d parallelTransport(const Eigen::Vector3d &v, const Eigen::Vector3
 
 double positionConstraintEnergy(RodConfig &config, std::vector<Eigen::VectorXd> *dEs)
 {
-    
     int nconstraints = (int)config.constraints.size();
     double totenergy = 0;
     for (int i = 0; i < nconstraints; i++)
@@ -358,4 +550,3 @@ double constraintEnergy(RodConfig &config, std::vector<Eigen::VectorXd> *dEs, st
 
     return result;
 }
-
