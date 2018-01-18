@@ -257,7 +257,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
         Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
         Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, w1 - w0);
         double theta = angle(d1t, d2, t12);
-        double factor = 0.5 * c.stiffness;
+        double factor = 0.5 * 100 * c.stiffness;
         r[roffset + i] = sqrt(factor)*theta;
         if (Jr)
         {

@@ -92,5 +92,7 @@ RodConfig *readRod(const char *filename)
         ifs >> c.stiffness;
         ret->addConstraint(c);
     }
+    if (!ifs)
+        exit(-1);
     return ret;
 }

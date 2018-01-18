@@ -115,12 +115,12 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
 
             if (beta - alpha < 1e-8)
             {
-                return t;
+                return newdE.squaredNorm();
             }
         }
         else
         {
-            return t;
+            return newdE.squaredNorm();
         }
     }
 }
@@ -144,11 +144,7 @@ bool RodsHook::simulateOneStep()
     if (solver.info() != Eigen::Success)
         exit(-1);
     std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
-    lineSearch(*config, delta);
-
-    rAndJ(*config, r, NULL);
-
-    forceResidual = 0.5 * r.squaredNorm();
+    forceResidual = lineSearch(*config, delta);
     iter++;
 
     createVisualizationMesh();    
