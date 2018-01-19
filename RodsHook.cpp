@@ -156,3 +156,26 @@ void RodsHook::saveRods()
 {
     config->saveRodGeometry(savePrefix);
 }
+
+void RodsHook::showConstraints()
+{
+    int nconstraints = config->constraints.size();
+    forcePoints.resize(2 *nconstraints,3);
+    forceEdges.resize(nconstraints,2);
+    forceColors.resize(nconstraints, 3);
+    forceColors.col(0).setConstant(1);
+    forceColors.col(1).setConstant(0);
+    forceColors.col(2).setConstant(0);
+    for (int i = 0; i < nconstraints; i++)
+    {
+        Constraint &c = config->constraints[i];
+        Eigen::Vector3d v1 = config->rods[c.rod1]->curState.centerline.row(c.seg1);
+        Eigen::Vector3d v2 = config->rods[c.rod1]->curState.centerline.row((c.seg1 + 1) % config->rods[c.rod1]->numVertices());
+        Eigen::Vector3d w1 = config->rods[c.rod2]->curState.centerline.row(c.seg2);
+        Eigen::Vector3d w2 = config->rods[c.rod2]->curState.centerline.row((c.seg2 + 1) % config->rods[c.rod2]->numVertices());
+        forcePoints.row(2 * i) = (1.0 - c.bary1)*v1 + c.bary1 * v2;
+        forcePoints.row(2 * i + 1) = (1.0 - c.bary2)*w1 + c.bary2 * w2;
+        forceEdges(i, 0) = 2 * i;
+        forceEdges(i, 1) = 2 * i + 1;
+    }
+}

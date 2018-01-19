@@ -17,6 +17,7 @@ public:
             dirty = true;
         renderQ = Q;
         renderF = F;        
+        showConstraints();
     }
 
     virtual bool simulateOneStep();
@@ -37,7 +38,7 @@ public:
 
 private:    
     void createVisualizationMesh();
-    void showForces(int rod, const Eigen::VectorXd &dE);
+    void showConstraints();
 
     std::string loadName;
 
