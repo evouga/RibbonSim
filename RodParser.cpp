@@ -58,7 +58,7 @@ RodConfig *readRod(const char *filename)
             double dote = rs.directors.row(j).dot(e);
             if (fabs(dote) > 1e-4)
                 std::cout << "Warning: directors not orthogonal to the centerline" << std::endl;
-            rs.directors.row(j) -= dote * e;
+            rs.directors.row(j) -= dote * e.transpose();
             rs.directors.row(j) /= rs.directors.row(j).norm();  
             
         }        
@@ -88,6 +88,18 @@ RodConfig *readRod(const char *filename)
         Constraint c;
         ifs >> c.rod1 >> c.rod2;
         ifs >> c.seg1 >> c.seg2;
+        if(c.rod1 < 0 || c.rod1 >= ret->numRods() || c.rod2 < 0 || c.rod2 >= ret->numRods())
+        {
+            std::cerr << "Bad rod in constraint " << i << std::endl;
+            exit(-1);
+        }
+        if(c.seg1 < 0 || c.seg1 >= ret->rods[c.rod1]->numSegments() || c.seg2 < 0 || c.seg2 >= ret->rods[c.rod2]->numSegments())
+        { 
+            std::cerr << "Bad segment in constraint " << i << std::endl;
+            std::cerr << "Segment 1: " << c.seg1 << "/" << ret->rods[c.rod1]->numSegments() << std::endl;
+            std::cerr << "Segment 2: " << c.seg2 << "/" << ret->rods[c.rod2]->numSegments() << std::endl;
+            exit(-1);
+        }
         ifs >> c.bary1 >> c.bary2;
         ifs >> c.stiffness;
         ret->addConstraint(c);

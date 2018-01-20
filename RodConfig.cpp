@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <igl/writeOBJ.h>
+#include <Eigen/Geometry>
 
 Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
 {

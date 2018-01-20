@@ -153,9 +153,9 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
             Eigen::Vector3d t01 = (v1 - v0) / (v1 - v0).norm();
             Eigen::Vector3d t12 = (v2 - v1) / (v2 - v1).norm();
             Eigen::Vector3d kb = 2.0*t01.cross(t12) / (1.0 + t01.dot(t12));
-            Eigen::Vector3d db11 = state.directors.row((nsegs + i - 1) % nsegs);
+            Eigen::Vector3d db11 = state.directors.row((nsegs + i - 1) % nsegs).transpose();
             Eigen::Vector3d db21 = t01.cross(db11);
-            Eigen::Vector3d db12 = state.directors.row(i);
+            Eigen::Vector3d db12 = state.directors.row(i).transpose();
             Eigen::Vector3d db22 = t12.cross(db12);
             double theta1 = state.thetas[(nsegs + i - 1) % nsegs];
             double theta2 = state.thetas[i];
@@ -247,9 +247,9 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
         Eigen::Vector3d t01 = (v1 - v0) / (v1 - v0).norm();
         Eigen::Vector3d t12 = (w1 - w0) / (w1 - w0).norm();
         Eigen::Vector3d kb = 2.0*t01.cross(t12) / (1.0 + t01.dot(t12));
-        Eigen::Vector3d db11 = rs1.directors.row(c.seg1);
+        Eigen::Vector3d db11 = rs1.directors.row(c.seg1).transpose();
         Eigen::Vector3d db21 = t01.cross(db11);
-        Eigen::Vector3d db12 = rs2.directors.row(c.seg2);
+        Eigen::Vector3d db12 = rs2.directors.row(c.seg2).transpose();
         Eigen::Vector3d db22 = t12.cross(db12);
         double theta1 = rs1.thetas[c.seg1];
         double theta2 = rs2.thetas[c.seg2];
@@ -257,7 +257,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
         Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
         Eigen::Vector3d d1t = parallelTransport(d1, v1 - v0, w1 - w0);
         double theta = angle(d1t, d2, t12);
-        double factor = 0 * 0.5 * c.stiffness;
+        double factor = 0.5 * c.stiffness;
         r[roffset + i] = sqrt(factor)*theta;
         if (Jr)
         {
