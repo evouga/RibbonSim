@@ -11,6 +11,8 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addGroup("Sim Options");
     viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
     viewer.ngui->addVariable("Save Prefix", savePrefix);
+
+    viewer.ngui->addVariable("Orientation Weight", angleWeight);
     
     viewer.ngui->addGroup("Sim Status");
     viewer.ngui->addVariable("Iteration", iter, false);
@@ -38,7 +40,7 @@ void RodsHook::createVisualizationMesh()
     config->createVisualizationMesh(Q, F);
 }
 
-double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
+double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angleWeight)
 {
     double t = 1.0;
     double c1 = 0.1;
@@ -49,7 +51,7 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
 
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> J;
-    rAndJ(config, r, &J);
+    rAndJ(config, r, &J, angleWeight);
     
     Eigen::VectorXd dE;
     Eigen::VectorXd newdE;
@@ -89,7 +91,7 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update)
             dofoffset += 3 * nverts + 2 * nsegs;
         }
         
-        rAndJ(config, r, &J);
+        rAndJ(config, r, &J, angleWeight);
 
         double newenergy = 0.5 * r.squaredNorm();
         newdE = J.transpose() * r;
@@ -129,14 +131,14 @@ bool RodsHook::simulateOneStep()
 {
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> Jr;
-    rAndJ(*config, r, &Jr);
+    rAndJ(*config, r, &Jr, angleWeight);
 
     std::cout << "Orig energy: " << r.squaredNorm() << std::endl;
     Eigen::SparseMatrix<double> mat = Jr.transpose() * Jr;
     Eigen::SparseMatrix<double> I(mat.rows(), mat.cols());
     I.setIdentity();    
-    double reg = 1e-6;
-    mat += reg*I;
+    double Treg = 1e-6;
+    mat += Treg*I;
 
     Eigen::VectorXd rhs = Jr.transpose() * r;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(mat);
@@ -144,7 +146,7 @@ bool RodsHook::simulateOneStep()
     if (solver.info() != Eigen::Success)
         exit(-1);
     std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
-    forceResidual = lineSearch(*config, delta);
+    forceResidual = lineSearch(*config, delta, angleWeight);
     iter++;
 
     createVisualizationMesh();    
