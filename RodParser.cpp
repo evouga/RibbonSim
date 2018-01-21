@@ -80,8 +80,16 @@ RodConfig *readRod(const char *filename)
         {
             ifs >> widths[i];
         }        
-        Rod *r = new Rod(rs, widths, params, isclosed);
-        ret->addRod(r);
+        if(nverts >= 2)
+        {
+            Rod *r = new Rod(rs, widths, params, isclosed);
+            ret->addRod(r);
+        }
+        else
+        {
+            std::cerr << "Rod with only " << nverts << " vertices detected" << std::endl;
+            exit(-1);
+        }
     }
     for (int i = 0; i < nconstraints; i++)
     {
