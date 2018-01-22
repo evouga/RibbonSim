@@ -329,6 +329,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
             J.push_back(Eigen::Triplet<double>(roffset + i, rod2thetaoffset + c.seg2, sqrt(factor)));
         }
     }
+
     roffset += nconstraints;
     }
     if(roffset != nterms)

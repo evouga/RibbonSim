@@ -184,15 +184,15 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             Eigen::Vector3d T = v1 - v0;
             T /= T.norm();
             
-            Q.row(4 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 0) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 1) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + 10*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + 10*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 0) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + 10*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 1) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + 10*rods[rod]->params.thickness / 2.0 * N.row(i));
 
-            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - 0*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - 0*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - 0*rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - 0*rods[rod]->params.thickness / 2.0 * N.row(i));
             
             F(8 * i + 0, 0) = 4 * i + 0;
             F(8 * i + 0, 1) = 4 * i + 1;
