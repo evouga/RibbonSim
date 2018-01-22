@@ -120,9 +120,11 @@ RodConfig *readRod(const char *filename)
         ifs >> c.bary1 >> c.bary2;
         ifs >> c.stiffness;
         c.assignment = assignment;
+        c.visited = false;
         assignment *= -1;
         ret->addConstraint(c);
     }
+    ret->initWeave(); // initializes constraints more intelligently
 
     // fix orientations
 

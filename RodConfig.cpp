@@ -82,6 +82,66 @@ void RodConfig::addConstraint(Constraint c)
     constraints.push_back(c);
 }
 
+struct weaveConstraint
+{
+    int cId;
+    int segId; 
+};
+
+bool compWeaveConstraint(const weaveConstraint &a, const weaveConstraint &b)
+{
+    return a.segId < b.segId;
+}
+
+void RodConfig::initWeave()
+{
+// make a list of constraints per rod 
+    std::vector< std::vector < weaveConstraint > > cmap; 
+     
+    for (int i = 0; i < constraints.size(); i++)
+    {
+        std::vector< weaveConstraint > m;
+        cmap.push_back(m);
+    } 
+    
+    for (int i = 0; i < constraints.size(); i++) 
+    { 
+        Constraint c = constraints[i];
+        weaveConstraint wc1, wc2;
+        wc1.cId = i;
+        wc2.cId = i;
+        wc1.segId = c.seg1;
+        wc2.segId = c.seg2;
+        
+        cmap[c.rod1].push_back(wc1);
+        cmap[c.rod2].push_back(wc2);
+    }
+ 
+    int startassignment = -1;
+    for (int i = 0; i < constraints.size(); i++)
+    {
+        startassignment *= -1;
+        int curassignment = startassignment;
+        std::sort(cmap[i].begin(), cmap[i].end(), compWeaveConstraint);
+        for (int j = 0; j < cmap[i].size(); j++)
+        { 
+            if ( constraints[cmap[i][j].cId].visited )
+            { 
+                curassignment = constraints[cmap[i][j].cId].assignment * -1;   
+            } 
+            else 
+            { 
+                constraints[cmap[i][j].cId].assignment = curassignment; 
+                curassignment *= -1;
+                constraints[cmap[i][j].cId].visited = true;
+            } 
+
+        } 
+    } 
+
+}
+
+
 void RodConfig::reset()
 {
     int nrods = (int)rods.size();

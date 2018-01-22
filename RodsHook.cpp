@@ -273,6 +273,7 @@ void RodsHook::linearSubdivision()
         newconstraints.push_back(newc);
     }
     config->constraints = newconstraints;
+    config->initWeave();
     createVisualizationMesh();
     updateRenderGeometry();
 }

@@ -52,6 +52,7 @@ struct Constraint
     double bary1, bary2;
     double stiffness;
     int assignment;
+    bool visited;
 };
 
 class RodConfig
@@ -61,6 +62,7 @@ public:
 
     void addRod(Rod *rod);
     void addConstraint(Constraint c);
+    void initWeave(); // Call after all constraints initialized
     int numRods() const { return (int)rods.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
