@@ -10,7 +10,7 @@ double angle(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2, const Eigen::
     return result;
 }
 
-void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *Jr, double angleWeight)
+void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *Jr, double angleWeight, bool optimizeWidths)
 {
     int nterms = 0;
     int ndofs = 0;
@@ -21,10 +21,14 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
         nterms += config.rods[i]->numSegments(); // stretching
         nterms += 2 * njoints; // bending
         nterms += njoints; // twisting
+        if(optimizeWidths)
+            nterms += njoints; // width regularization
     }
-    nterms += 3*config.constraints.size(); // constraint positions
-    nterms += config.constraints.size(); // constraint directions
-
+    if(!optimizeWidths)
+    {
+        nterms += 3*config.constraints.size(); // constraint positions
+        nterms += config.constraints.size(); // constraint directions
+    }
 
     r.resize(nterms);
     r.setConstant(std::numeric_limits<double>::infinity());
@@ -62,12 +66,18 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
             if (Jr)
             {
                 Eigen::Vector3d dlen = (v1 - v2) / len;
-                for (int j = 0; j < 3; j++)
+                if(!optimizeWidths)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * i + j, sqrt(factor*rod.widths[i])*dlen[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * ((i + 1) % nverts) + j, -sqrt(factor*rod.widths[i])*dlen[j]));
+                    for (int j = 0; j < 3; j++)
+                    {
+                        J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * i + j, sqrt(factor*rod.widths[i])*dlen[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * ((i + 1) % nverts) + j, -sqrt(factor*rod.widths[i])*dlen[j]));
+                    }
                 }
-                //J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + woffset + i, 0.5*sqrt(factor) / sqrt(rod.widths[i]) * (len - restlen)));
+                else
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + woffset + i, 0.5*sqrt(factor) / sqrt(rod.widths[i]) * (len - restlen)));
+                }
             }
         }
 
@@ -106,39 +116,44 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
             r[roffset + 2 * idx + 1] = vertr2;
             if (Jr)
             {
-                Eigen::Vector3d ttilde = (t01 + t12) / (1.0 + t01.dot(t12));
-                Eigen::Vector3d d1tilde = (d11 + d12) / (1.0 + t01.dot(t12));
-                Eigen::Vector3d d2tilde = (d21 + d22) / (1.0 + t01.dot(t12));
-                Eigen::Vector3d dk11 = 1.0 / (v1-v0).norm() * (-k1 * ttilde + t12.cross(d2tilde));
-                Eigen::Vector3d dk12 = 1.0 / (v2-v1).norm() * (-k1 * ttilde - t01.cross(d2tilde));
-                for (int j = 0; j < 3; j++)
+                if(!optimizeWidths)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor1*width) * dk11[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * i + j, sqrt(factor1*width) * dk11[j] - sqrt(factor1*width) * dk12[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor1*width) * dk12[j]));
-                }
-                Eigen::Vector3d dk21 = 1.0 / (v1-v0).norm() * (-k2 * ttilde + t12.cross(d1tilde));
-                Eigen::Vector3d dk22 = 1.0 / (v2-v1).norm() * (-k2 * ttilde - t01.cross(d1tilde));
-                for (int j = 0; j < 3; j++)
-                {
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor2*width*width*width) * dk21[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * i + j, sqrt(factor2*width*width*width) * dk21[j] - sqrt(factor2*width*width*width) * dk22[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor2*width*width*width) * dk22[j]));
-                }           
+                    Eigen::Vector3d ttilde = (t01 + t12) / (1.0 + t01.dot(t12));
+                    Eigen::Vector3d d1tilde = (d11 + d12) / (1.0 + t01.dot(t12));
+                    Eigen::Vector3d d2tilde = (d21 + d22) / (1.0 + t01.dot(t12));
+                    Eigen::Vector3d dk11 = 1.0 / (v1-v0).norm() * (-k1 * ttilde + t12.cross(d2tilde));
+                    Eigen::Vector3d dk12 = 1.0 / (v2-v1).norm() * (-k1 * ttilde - t01.cross(d2tilde));
+                    for (int j = 0; j < 3; j++)
+                    {
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor1*width) * dk11[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * i + j, sqrt(factor1*width) * dk11[j] - sqrt(factor1*width) * dk12[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor1*width) * dk12[j]));
+                    }
+                    Eigen::Vector3d dk21 = 1.0 / (v1-v0).norm() * (-k2 * ttilde + t12.cross(d1tilde));
+                    Eigen::Vector3d dk22 = 1.0 / (v2-v1).norm() * (-k2 * ttilde - t01.cross(d1tilde));
+                    for (int j = 0; j < 3; j++)
+                    {
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor2*width*width*width) * dk21[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * i + j, sqrt(factor2*width*width*width) * dk21[j] - sqrt(factor2*width*width*width) * dk22[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor2*width*width*width) * dk22[j]));
+                    }           
 
-                Eigen::Vector3d Dd11 = -db11*sin(theta1) + db21*cos(theta1);
-                Eigen::Vector3d Dd21 = -db11*cos(theta1) - db21*sin(theta1);
-                Eigen::Vector3d Dd12 = -db12*sin(theta2) + db22*cos(theta2);
-                Eigen::Vector3d Dd22 = -db12*cos(theta2) - db22*sin(theta2);
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor1*width) * Dd21.dot(kb)));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor2*width*width*width) * Dd11.dot(kb)));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + i, 0.5*sqrt(factor1*width) * Dd22.dot(kb)));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + i, 0.5*sqrt(factor2*width*width*width) * Dd12.dot(kb)));            
-            
-                /*J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + i, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + (nsegs + i - 1) % nsegs, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));
-                J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + i, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));*/
+                    Eigen::Vector3d Dd11 = -db11*sin(theta1) + db21*cos(theta1);
+                    Eigen::Vector3d Dd21 = -db11*cos(theta1) - db21*sin(theta1);
+                    Eigen::Vector3d Dd12 = -db12*sin(theta2) + db22*cos(theta2);
+                    Eigen::Vector3d Dd22 = -db12*cos(theta2) - db22*sin(theta2);
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor1*width) * Dd21.dot(kb)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, 0.5*sqrt(factor2*width*width*width) * Dd11.dot(kb)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + thetaoffset + i, 0.5*sqrt(factor1*width) * Dd22.dot(kb)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + thetaoffset + i, 0.5*sqrt(factor2*width*width*width) * Dd12.dot(kb)));            
+                }
+                else
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx, dofoffset + woffset + i, 0.5 * sqrt(factor1) / sqrt(width) * k1 * 0.5));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + (nsegs + i - 1) % nsegs, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));
+                    J.push_back(Eigen::Triplet<double>(roffset + 2 * idx + 1, dofoffset + woffset + i, 3.0 / 2.0 * sqrt(factor2*width) * k2 * 0.5));
+                }
             }
             idx++;
         }
@@ -172,26 +187,51 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
             {
                 Eigen::Vector3d dtheta1 = 0.5*kb / (v1 - v0).norm();
                 Eigen::Vector3d dtheta2 = 0.5*kb / (v2 - v1).norm();
-                for (int j = 0; j < 3; j++)
+                if(!optimizeWidths)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor*width)*dtheta1[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * i + j, sqrt(factor*width)*dtheta1[j] - sqrt(factor*width)*dtheta2[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor*width)*dtheta2[j]));
-                }            
+                    for (int j = 0; j < 3; j++)
+                    {
+                        J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((nverts + i - 1) % nverts) + j, -sqrt(factor*width)*dtheta1[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * i + j, sqrt(factor*width)*dtheta1[j] - sqrt(factor*width)*dtheta2[j]));
+                        J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3 * ((i + 1) % nverts) + j, sqrt(factor*width)*dtheta2[j]));
+                    }            
             
-                J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, -sqrt(factor*width)));
-                J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + i, sqrt(factor*width)));
-
-                //J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
-                //J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + i, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + (nsegs + i - 1) % nsegs, -sqrt(factor*width)));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + thetaoffset + i, sqrt(factor*width)));
+                }
+                else
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + (nsegs + i - 1) % nsegs, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + woffset + i, 0.5 * sqrt(factor) / sqrt(width) * theta * 0.5));
+                }
             }
             idx++;
         }
 
         roffset += idx;
 
+        if(optimizeWidths)
+        {
+            idx = 0;
+            for(int i = startseg; i < nsegs; i++)
+            {
+                double mag = 1;
+                r[roffset + idx] = sqrt(mag) * (rod.widths[(nsegs + i - 1) % nsegs] - rod.widths[i]);
+                if(Jr)
+                {
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3*nverts + nsegs + ((nsegs + i - 1) % nsegs), sqrt(mag)));
+                    J.push_back(Eigen::Triplet<double>(roffset + idx, dofoffset + 3*nverts + nsegs + i, -sqrt(mag)));
+                }
+                idx++;
+            }
+            roffset += idx;
+        }
+        
+
         dofoffset += 3 * rod.numVertices() + 2 * rod.numSegments();
     }
+    if(!optimizeWidths)
+    {
     int nconstraints = (int)config.constraints.size();
     for (int i = 0; i < nconstraints; i++)
     {
@@ -290,6 +330,9 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
         }
     }
     roffset += nconstraints;
+    }
+    if(roffset != nterms)
+        exit(-1);
 
     if (Jr)
         Jr->setFromTriplets(J.begin(), J.end());

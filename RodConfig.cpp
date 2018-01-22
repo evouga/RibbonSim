@@ -174,8 +174,8 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             B.row(i) = -d1*sin(theta) + d2*cos(theta);
         }
 
-        Eigen::MatrixXd Q(2 * nverts, 3);
-        Eigen::MatrixXi F(2 * nsegs, 3);
+        Eigen::MatrixXd Q(4 * nverts, 3);
+        Eigen::MatrixXi F(8 * nsegs, 3);
 
         for (int i = 0; i < nsegs; i++)
         {
@@ -183,23 +183,44 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             Eigen::Vector3d v1 = rods[rod]->curState.centerline.row((i + 1) % nverts);
             Eigen::Vector3d T = v1 - v0;
             T /= T.norm();
-
-            double weight;
-            if ((i == 0 || i == nsegs - 1) && !rods[rod]->isClosed())
-                weight = 1.0;
-            else weight = 0.5;
-
-            Q.row(2 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i));
-            Q.row(2 * i + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i));
             
-            F(2 * i + 0, 0) = 2 * i + 0;
-            F(2 * i + 0, 1) = 2 * i + 1;
-            F(2 * i + 0, 2) = 2 * i + 2;
-            F(2 * i + 1, 0) = 2 * i + 2;
-            F(2 * i + 1, 1) = 2 * i + 1;
-            F(2 * i + 1, 2) = 2 * i + 3;
+            Q.row(4 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 0) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 1) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+
+            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            
+            F(8 * i + 0, 0) = 4 * i + 0;
+            F(8 * i + 0, 1) = 4 * i + 1;
+            F(8 * i + 0, 2) = 4 * (i+1) + 0;
+            F(8 * i + 1, 0) = 4 * (i+1) + 0;
+            F(8 * i + 1, 1) = 4 * i + 1;
+            F(8 * i + 1, 2) = 4 * (i+1) + 1;
+
+            F(8 * i + 2, 0) = 4 * i + 3;
+            F(8 * i + 2, 1) = 4 * i + 2;
+            F(8 * i + 2, 2) = 4 * (i+1) + 2;
+            F(8 * i + 3, 0) = 4 * (i+1) + 3;
+            F(8 * i + 3, 1) = 4 * i + 3;
+            F(8 * i + 3, 2) = 4 * (i+1) + 2;
+
+            F(8 * i + 4, 0) = 4 * i + 0;
+            F(8 * i + 4, 1) = 4 * (i+1) + 0;
+            F(8 * i + 4, 2) = 4 * i + 2;
+            F(8 * i + 5, 0) = 4 * i + 2;
+            F(8 * i + 5, 1) = 4 * (i+1) + 0;
+            F(8 * i + 5, 2) = 4 * (i+1) + 2;
+
+            F(8 * i + 6, 0) = 4 * i + 3;
+            F(8 * i + 6, 1) = 4 * (i+1) + 1;
+            F(8 * i + 6, 2) = 4 * i + 1;
+            F(8 * i + 7, 0) = 4 * i + 3;
+            F(8 * i + 7, 1) = 4 * (i+1) + 3;
+            F(8 * i + 7, 2) = 4 * (i+1) + 1;
         }
 
         std::stringstream ss;

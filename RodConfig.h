@@ -39,10 +39,10 @@ public:
     Eigen::VectorXd momInertia;
     RodParams params;
 
+    void initializeRestQuantities();
 private:
     bool isClosed_;
 
-    void initializeRestQuantities();
 };
 
 struct Constraint

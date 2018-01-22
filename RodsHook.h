@@ -39,6 +39,7 @@ public:
 private:    
     void createVisualizationMesh();
     void showConstraints();
+    void linearSubdivision();
 
     std::string loadName;
 
