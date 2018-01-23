@@ -14,6 +14,9 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addButton("Subdivide", std::bind(&RodsHook::linearSubdivision, this));
 
     viewer.ngui->addVariable("Orientation Weight", angleWeight);
+
+    viewer.ngui->addButton("Set Widths", std::bind(&RodsHook::setWidths, this));
+    viewer.ngui->addVariable("New Widths", newWidth);
     
     viewer.ngui->addGroup("Sim Status");
     viewer.ngui->addVariable("Iteration", iter, false);
@@ -272,4 +275,17 @@ void RodsHook::linearSubdivision()
     config->constraints = newconstraints;
     createVisualizationMesh();
     updateRenderGeometry();
+}
+
+void RodsHook::setWidths()
+{
+    for(int i=0; i<config->numRods(); i++)
+    {
+        for(int j=0; j<config->rods[i]->numSegments(); j++)
+        {
+            config->rods[i]->widths[j] = newWidth;
+        }
+    }
+    createVisualizationMesh();
+    updateRenderGeometry();  
 }
