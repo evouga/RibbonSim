@@ -99,6 +99,7 @@ RodConfig *readRod(const char *filename)
             exit(-1);
         }
     }
+    int assignment = 1;
     for (int i = 0; i < nconstraints; i++)
     {
         Constraint c;
@@ -118,6 +119,8 @@ RodConfig *readRod(const char *filename)
         }
         ifs >> c.bary1 >> c.bary2;
         ifs >> c.stiffness;
+        c.assignment = assignment;
+        assignment *= -1;
         ret->addConstraint(c);
     }
 

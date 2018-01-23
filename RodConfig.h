@@ -51,6 +51,7 @@ struct Constraint
     int seg1, seg2;
     double bary1, bary2;
     double stiffness;
+    int assignment;
 };
 
 class RodConfig
