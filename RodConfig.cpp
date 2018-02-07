@@ -237,6 +237,8 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
         Eigen::MatrixXd Q(4 * nverts, 3);
         Eigen::MatrixXi F(8 * nsegs, 3);
 
+        double negThick = 100.;
+
         for (int i = 0; i < nsegs; i++)
         {
             Eigen::Vector3d v0 = rods[rod]->curState.centerline.row(i);
@@ -249,10 +251,10 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             Q.row(4 * (i+1) + 0) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
             Q.row(4 * (i+1) + 1) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
 
-            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - negThick * rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - negThick * rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) -  negThick * rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) -  negThick * rods[rod]->params.thickness / 2.0 * N.row(i));
             
             F(8 * i + 0, 0) = 4 * i + 0;
             F(8 * i + 0, 1) = 4 * i + 1;
