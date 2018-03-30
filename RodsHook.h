@@ -41,6 +41,7 @@ private:
     void createVisualizationMesh();
     void showConstraints();
     void linearSubdivision();
+    void exportWeave();
 
     std::string loadName;
 

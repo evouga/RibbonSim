@@ -58,8 +58,8 @@ RodConfig *readRod(const char *filename)
             e /= e.norm();
             double dote = rs.directors.row(j).dot(e);
             if (fabs(dote) > 1e-4)
-                std::cout << "Warning: directors not orthogonal to the centerline" << std::endl;
-            rs.directors.row(j) -= dote * e.transpose();
+                std::cout << dote << "Warning: directors not orthogonal to the centerline" << std::endl;
+     //       rs.directors.row(j) -= dote * e.transpose();
             rs.directors.row(j) /= rs.directors.row(j).norm();  
             
         }        

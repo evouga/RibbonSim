@@ -64,6 +64,7 @@ public:
     void addConstraint(Constraint c);
     void initWeave(); // Call after all constraints initialized
     int numRods() const { return (int)rods.size(); }
+    int numConstraints() const { return (int)constraints.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
     void saveRodGeometry(const std::string &prefix);

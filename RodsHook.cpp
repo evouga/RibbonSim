@@ -1,5 +1,9 @@
 #include "RodsHook.h"
 #include "RodParser.h"
+#include "utility/simple_svg_1.0.0.hpp"
+
+
+
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
@@ -12,6 +16,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
     viewer.ngui->addVariable("Save Prefix", savePrefix);
     viewer.ngui->addButton("Subdivide", std::bind(&RodsHook::linearSubdivision, this));
+    viewer.ngui->addButton("Export Weave", std::bind(&RodsHook::exportWeave, this));
 
     viewer.ngui->addVariable("Orientation Weight", angleWeight);
 
@@ -177,6 +182,183 @@ void RodsHook::saveRods()
     config->saveRodGeometry(savePrefix);
 }
 
+
+using namespace svg;
+void RodsHook::exportWeave()
+{
+    double strip_width = 25.;
+    double strip_space = 10.;
+    double strip_stretch = 600.;
+    double label_spacing = 30.;
+
+    double maxlen = 0;
+    double maxseg = 0;
+    for (int i = 0; i < config->numRods(); i++) 
+    {  
+        if (config->rods[i]->numSegments() > maxlen) 
+            maxlen = config->rods[i]->numSegments();
+
+        for (int j = 0; j < config->rods[i]->numSegments() - 1; j++)
+        {
+            Eigen::Vector3d seg = config->rods[i]->curState.centerline.row(j) - config->rods[i]->curState.centerline.row(j + 1);
+            if ( seg.norm() > maxseg )
+                maxseg = seg.norm(); // Can opt w/ norm squared if slow...
+        }
+    } 
+
+    Dimensions dimensions(strip_stretch * maxlen * maxseg, (config->numRods() + 1) * (strip_width + strip_space));
+    Document doc("my_svg.svg", Layout(dimensions, Layout::BottomLeft));
+
+    Eigen::MatrixXi collisions = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
+    Eigen::MatrixXi collisions_match = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
+    Eigen::MatrixXi angles = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0.);
+    std::vector<Eigen::Matrix3d> rotations;
+    rotations.push_back( Eigen::MatrixXd::Identity(3,3) );
+    int match_iter = 0;
+    for (int i = 0; i < config->numConstraints(); i++)
+    {
+        Constraint c = config->constraints[i];
+        collisions(c.rod1, c.seg1) = (1 + c.rod2) * c.assignment;
+        collisions(c.rod2, c.seg2) = (1 + c.rod1) * c.assignment * -1;
+        collisions_match(c.rod1, c.seg1) = match_iter;
+        collisions_match(c.rod2, c.seg2) = match_iter;
+        match_iter = (match_iter + 1) % 8;
+        Eigen::Vector3d r1 = config->rods[c.rod1]->curState.centerline.row(c.seg1) - 
+                             config->rods[c.rod1]->curState.centerline.row(c.seg1 + 1); 
+        Eigen::Vector3d r2 = config->rods[c.rod2]->curState.centerline.row(c.seg2) - 
+                             config->rods[c.rod2]->curState.centerline.row(c.seg2 + 1);
+        r1.normalize();
+        r2.normalize();
+
+
+        Eigen::Vector3d d1 = config->rods[c.rod1]->curState.directors.row(i);
+        Eigen::Vector3d d2 = r1.cross(d1);
+        double theta = config->rods[c.rod1]->curState.thetas[i];
+        Eigen::Vector3d n_r1 = d1*cos(theta) + d2*sin(theta);
+
+        Eigen::Vector3d n = r1.cross(r2);
+        if ( n.dot(n_r1) < .01 )
+            n *= -1;
+
+        Eigen::Matrix3d f1;
+        f1.col(0) = r1;
+        f1.col(1) = n.cross(r1);
+        f1.col(2) = n;
+        
+        Eigen::Matrix3d f2;
+        f2.col(0) = r2;
+        f2.col(1) = n.cross(r2);
+        f2.col(2) = n;
+
+        if ( c.assignment > 0 )
+        {
+            angles(c.rod1, c.seg1) = 0;
+            angles(c.rod2, c.seg2) = rotations.size();
+            rotations.push_back(  f1.inverse() * f2 );
+        }
+        else 
+        {
+            angles(c.rod2, c.seg2) = 0;
+            angles(c.rod1, c.seg1) = rotations.size();
+            rotations.push_back(  f2.inverse() * f1 );
+        }
+    } 
+
+    enum Defaults { Transparent = -1, Aqua, Black, Blue, Brown, Cyan, Fuchsia,
+            Green, Lime, Magenta, Orange, Purple, Red, Silver, White, Yellow };
+
+    Color clist[] = {Color::Black, Color::Blue, Color::Red, Color::Yellow, Color::Lime, Color::Orange, Color::Purple, Color::Cyan};
+    // Draw lines
+    for (int i = 0; i < config->numRods(); i++) 
+    {
+        Rod *r = config->rods[i];
+        Polyline pl_l(Fill(Color::Transparent), Stroke(1., Color::Black));
+        Polyline pl_r(Stroke(.5, Color::Black));
+        double startpoint = 0.;
+        double endpoint;
+        double x_shift = i * (strip_width + strip_space);
+        pl_l << Point(startpoint, x_shift);
+        for (int j = 0; j < r->numSegments(); j++)
+        { 
+            Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
+            endpoint = seg.norm() * strip_stretch + startpoint;
+            pl_l << Point(endpoint, x_shift);
+            startpoint = endpoint; 
+        }
+
+        pl_r = pl_l;
+        pl_r.offset( Point (0, strip_width) );
+        doc << pl_r << pl_l;
+    }
+
+    // Draw crossings and labels 
+    for (int i = 0; i < config->numRods(); i++) 
+    {
+        Rod *r = config->rods[i];
+        double startpoint = 0.;
+        double endpoint;
+        double x_shift = i * (strip_width + strip_space) + strip_space;
+        double lasttext = -200.;
+
+        for (int j = 0; j < r->numSegments() - 1; j++)
+        { 
+            Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
+            endpoint = seg.norm() * strip_stretch + startpoint;
+         //   pl_l << Point(endpoint, x_shift);
+            startpoint = endpoint;
+            if ( collisions(i,j) != 0) 
+            { 
+                char shift = collisions_match(i,j) + 'a';
+                doc << svg::Text(Point(endpoint - 5, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(5, "Verdana"));
+                doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(5, "Verdana"));
+                lasttext = endpoint;
+
+                
+                Polyline mark_crossing(Fill(Color::Transparent), Stroke(3., Color::Black));
+                if (collisions(i,j) < 0)
+                {
+                    mark_crossing = Polyline(Fill(Color::Transparent), Stroke(3., clist[collisions_match(i,j)]));
+                }
+                else 
+                {
+                    mark_crossing = Polyline(Fill(Color::Transparent), Stroke(1., clist[collisions_match(i,j)]));
+                }
+
+                Eigen::Matrix3d orient = rotations[angles(i,j)] * Eigen::MatrixXd::Identity(3,3) * strip_width / 2.;
+
+                Eigen::Vector2d pos_x = Eigen::Vector2d(orient(0, 0), orient(0, 1));
+                Eigen::Vector2d pos_y = Eigen::Vector2d(orient(1, 0), orient(1, 1)); // 1. / cos(angles(i, j)) *
+                double y_center = i * (strip_width + strip_space) + .5 * strip_width;
+
+                std::cout << orient.col(2) << "\n";
+
+                mark_crossing << Point( endpoint + pos_x(0) + pos_y(0) * (1.),   pos_x(1) + pos_y(1) * (1.) + y_center )
+                              << Point( endpoint + pos_x(0) - pos_y(0) * (1.),   pos_x(1) - pos_y(1) * (1.) + y_center )
+                              << Point( endpoint - pos_x(0) - pos_y(0) * (1.), - pos_x(1) - pos_y(1) * (1.) + y_center )
+                              << Point( endpoint - pos_x(0) + pos_y(0) * (1.), - pos_x(1) + pos_y(1) * (1.) + y_center );
+/*                mark_crossing << Point( endpoint + pos_x(0) + pos_y(0) * (1 + (tan(angles(i, j)) * strip_width / 2.)),   pos_x(1) + pos_y(1) * (1 + (tan(angles(i, j)) * strip_width / 2.)) + y_center )
+                              << Point( endpoint + pos_x(0) - pos_y(0) * (1 - (tan(angles(i, j)) * strip_width / 2.)),   pos_x(1) - pos_y(1) * (1 - (tan(angles(i, j)) * strip_width / 2.)) + y_center )
+                              << Point( endpoint - pos_x(0) - pos_y(0) * (1 + (tan(angles(i, j)) * strip_width / 2.)), - pos_x(1) - pos_y(1) * (1 + (tan(angles(i, j)) * strip_width / 2.)) + y_center )
+                              << Point( endpoint - pos_x(0) + pos_y(0) * (1 - (tan(angles(i, j)) * strip_width / 2.)), - pos_x(1) + pos_y(1) * (1 - (tan(angles(i, j)) * strip_width / 2.)) + y_center );*/
+
+                doc << mark_crossing;
+
+            } 
+            if (lasttext < endpoint - label_spacing) 
+            {
+                std::cout << endpoint << "\n";
+                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2), std::to_string(i + 1), Color::Black, Font(9, "Verdana"));
+                lasttext = endpoint;
+            }
+        }
+
+
+    } 
+    
+    doc.save();
+
+}
+
 void RodsHook::showConstraints()
 {
     int nconstraints = config->constraints.size();
@@ -184,7 +366,7 @@ void RodsHook::showConstraints()
     forceEdges.resize(nconstraints,2);
     forceColors.resize(nconstraints, 3);
     forceColors.col(0).setConstant(1);
-    forceColors.col(1).setConstant(0);
+    forceColors.col(1).setConstant(1);
     forceColors.col(2).setConstant(0);
     for (int i = 0; i < nconstraints; i++)
     {
