@@ -53,6 +53,7 @@ struct Constraint
     double stiffness;
     int assignment;
     bool visited;
+    int color;
 };
 
 class RodConfig
