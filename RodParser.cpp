@@ -121,6 +121,7 @@ RodConfig *readRod(const char *filename)
         ifs >> c.stiffness;
         c.assignment = assignment;
         c.visited = false;
+        c.color = 0;
         assignment *= -1;
         ret->addConstraint(c);
     }

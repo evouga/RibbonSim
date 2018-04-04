@@ -10,6 +10,8 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     savePrefix = "rod_";
     loadName = "../configs/torus.rod";
 
+
+
     viewer.ngui->addVariable("Config File", loadName);
 
     viewer.ngui->addGroup("Sim Options");
@@ -480,6 +482,7 @@ void RodsHook::linearSubdivision()
         newc.rod1 = c.rod1;
         newc.rod2 = c.rod2;
         newc.stiffness = c.stiffness;
+        newc.color = 0;
         if(c.bary1 < 0.5)
         {
             newc.seg1 = 2*c.seg1;
