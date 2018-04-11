@@ -2,7 +2,7 @@
 #include "RodParser.h"
 #include "utility/simple_svg_1.0.0.hpp"
 
-
+#include <igl/unproject_onto_mesh.h>
 
 
 void RodsHook::initGUI(igl::viewer::Viewer &viewer)
@@ -28,6 +28,44 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addGroup("Sim Status");
     viewer.ngui->addVariable("Iteration", iter, false);
     viewer.ngui->addVariable("Force Residual", forceResidual, false);
+
+    // viewer.callback_mouse_down = [this](igl::viewer::Viewer& viewer, int, int)->bool
+    //     {
+    //         int fid;
+    //         Eigen::Vector3f bc;
+    //         // Cast a ray in the view direction starting from the mouse position
+    //         double x = viewer.current_mouse_x;
+    //         double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+    //         if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+    //             viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
+    //         {
+    //             std::cout << fid << " - clicked on vertex #\n"; 
+    //             bool found = false;
+    //             for (int i = 0; i < (int)selectedVertices.size(); i++)
+    //             {
+    //                 if(selectedVertices[i].first == fid)
+    //                 { 
+    //                     found = true;
+    //                     if (selectedVertices[i].second < 2)
+    //                         selectedVertices[i].second++;
+    //                     else
+    //                         selectedVertices.erase(selectedVertices.begin() + i);
+    //                 }
+    //             }
+    //             if(!found && selectedVertices.size() < 2)
+    //             {
+    //                 std::pair<int, int> newsel(fid, 0);
+    //                 selectedVertices.push_back(newsel);
+    //             }
+    //             renderSelectedVertices.clear();
+    //             for (int i = 0; i < (int)selectedVertices.size(); i++)
+    //             {
+    //                 renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
+    //             }
+    //             return true;
+    //         }
+    //         return false;
+    //     };
 }
 
 void RodsHook::initSimulation()
@@ -191,7 +229,7 @@ void RodsHook::exportWeave()
     double strip_width = 45.;
     double strip_space = 10.;
     double strip_stretch = 600.;
-    double label_spacing = 50.;
+    double label_spacing = 90.;
 
     enum Defaults { Transparent = -1, Aqua, Black, Blue, Brown, Cyan, Fuchsia,
         Green, Lime, Magenta, Orange, Purple, Red, Silver, White, Yellow };
@@ -295,27 +333,29 @@ void RodsHook::exportWeave()
     for (int i = 0; i < config->numRods(); i++) 
     {
         Rod *r = config->rods[i];
-        Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
+    //    Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
         Polyline pl_l(Fill(Color::Transparent), Stroke(1., Color::Black));
         Polyline pl_r(Stroke(.5, Color::Black));
         double startpoint = 0.;
         double endpoint;
         double x_shift = i * (strip_width + strip_space);
         pl_l << Point(startpoint, x_shift);
-        pl_center << Point(startpoint, x_shift);
+  //      pl_center << Point(startpoint, x_shift);
         for (int j = 0; j < r->numSegments(); j++)
         { 
             Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
             endpoint = seg.norm() * strip_stretch + startpoint;
             pl_l << Point(endpoint, x_shift);
-            pl_center << Point(endpoint, x_shift);
+            svg::Color c( r->colors(j, 0 ) * 255, r->colors(j, 1 ) * 255, r->colors(j, 2 ) * 255);
+            doc << Line( Point(startpoint, x_shift + strip_width / 2.), Point(endpoint, x_shift + strip_width / 2.), Stroke(strip_width - 6., c) );
+   //         pl_center << Point(endpoint, x_shift);
             startpoint = endpoint; 
         }
 
         pl_r = pl_l;
         pl_r.offset( Point (0, strip_width) );
-        pl_center.offset( Point (0, strip_width / 2.) );
-        doc << pl_center << pl_r << pl_l;
+   //     pl_center.offset( Point (0, strip_width / 2.) );
+        doc << pl_r << pl_l;
     }
 
     // Draw crossings and labels 
@@ -338,7 +378,7 @@ void RodsHook::exportWeave()
                 double y_center = i * (strip_width + strip_space) + .5 * strip_width;
                 if ( self_intersect(i,j) > 0 )
                 {
-                    doc << Circle( Point(endpoint, y_center), strip_width - 5, Fill(Color::Fuchsia), Stroke(3., Color::Fuchsia));
+                    doc << Circle( Point(endpoint, y_center), strip_width / 2., Fill(Color::Fuchsia), Stroke(3., Color::Fuchsia));
                 }
                 else 
                 {
@@ -389,15 +429,15 @@ void RodsHook::exportWeave()
                 doc << mark_crossing;
 
                 char shift = collisions_circ_match(i,j) + 'a';
-                doc << svg::Text(Point(endpoint - 5, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(5, "Verdana"));
-                doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(5, "Verdana"));
+                doc << svg::Text(Point(endpoint - 5, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(8, "Verdana"));
+                doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(8, "Verdana"));
                 lasttext = endpoint;
 
             } 
             if (lasttext < endpoint - label_spacing) 
             {
      //           std::cout << endpoint << "\n";
-                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2), std::to_string(i + 1), Color::Black, Font(9, "Verdana"));
+                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 6), std::to_string(i + 1), Color::White, Font(12, "Verdana"));
                 lasttext = endpoint;
             }
         }

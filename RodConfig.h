@@ -4,6 +4,8 @@
 #include <vector>
 #include <Eigen/Core>
 
+#include "utility/simple_svg_1.0.0.hpp"
+
 struct RodParams
 {
     double thickness;
@@ -32,6 +34,8 @@ public:
     int numSegments() const { return (int)curState.thetas.size(); }
     RodState curState;
     RodState startState;
+
+    Eigen::MatrixXd colors;
 
     Eigen::VectorXd widths;
     Eigen::VectorXd restlens;
@@ -68,6 +72,7 @@ public:
     int numConstraints() const { return (int)constraints.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
+    void setVisualizationMeshColors();
     void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;

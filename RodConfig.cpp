@@ -209,6 +209,75 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
         }
         offset += 8 * rods[rod]->numSegments();
     }
+    setVisualizationMeshColors();
+}
+
+static double face_colors[9][3] = { { .001, .001, .95 },
+                                          { 0.95, 0.001, 0.001 },
+                                          { 0.95, 0.95, 0.001 },
+                                          { 0.01, 0.95, 0.01 },
+                                          { 0.95, 0.7, 0.01 },
+                                          { 0.5, 0.01, 0.5 },
+                                          { 0.001, 0.95, 0.95 },
+                                          { .5, 0, 0},
+                                          {.7, .7, .2 } };
+
+void RodConfig::setVisualizationMeshColors()
+{
+    double minZ = 100000.0;
+    double maxZ = -100000.0;
+    for (int i = 0; i < numRods(); i++)
+    {
+        for (int j = 0; j < rods[i]->numSegments(); j++)
+        {
+            double curPos = rods[i]->startState.centerline(j, 1);
+            if ( minZ > curPos )
+            {
+                minZ = curPos;
+            }
+            if ( maxZ <  curPos )
+            {
+                maxZ = curPos;
+            }
+        }
+    }
+
+
+    int num_colors = 7;
+    for (int i = 0; i < numRods(); i++)
+    {
+        Eigen::MatrixXd col = Eigen::MatrixXd::Zero(rods[i]->numSegments(), 3);
+        for (int j = 0; j < rods[i]->numSegments(); j++)
+        {
+          double zLevel = rods[i]->startState.centerline(j , 1);
+          double scale = (maxZ - zLevel) / (maxZ - minZ);
+
+          double tscale = (zLevel - minZ) / (maxZ - minZ);
+          double highlight = tscale * tscale * tscale * tscale * .5;
+
+          double* c = face_colors[(i % num_colors)];
+          if ( scale > .995 )
+          {
+            c = face_colors[num_colors];
+          }
+          else if ( scale < .008 )
+          {
+            c = face_colors[num_colors + 1];
+            scale = 1.;
+            tscale = 1.;
+          }
+          else 
+          {
+              scale = 1 - scale * scale * scale * scale * scale;
+          }
+
+          col(j, 0) = std::min(c[0] * scale + highlight, 1.);
+          col(j, 1) = std::min(c[1] * scale + highlight, 1.);
+          col(j, 2) = std::min(c[2] * scale + highlight, 1.);
+        }
+        rods[i]->colors = col;
+    }
+
 }
 
 void RodConfig::saveRodGeometry(const std::string &prefix)

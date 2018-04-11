@@ -398,7 +398,7 @@ namespace svg
     */
     
     // AW 2012-03-20: code-coverage shows no use for this. comment out.
-    /*
+    
     class Line : public Shape
     {
     public:
@@ -428,7 +428,7 @@ namespace svg
         Point start_point;
         Point end_point;
     };
-    */
+    
     
     class EllipticalArc : public Shape
     {
