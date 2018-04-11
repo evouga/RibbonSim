@@ -43,17 +43,25 @@ public:
         faceColors.resize(faces, 4);
         int pos = 0;
 
-        faceColors.setConstant(0.7);
+        double transp = 1.;
 
         for (int i = 0; i < config->numRods(); i++)
         {
-            double alpha = 1.;
+            if (config->rods[i]->visible)
+            {
+                transp = 1.;
+            }
+            else
+            {
+                transp = -10.;
+            }
+
             for (int j = 0; j < config->rods[i]->numSegments(); j++)
             {
                 Eigen::Vector3d col = config->rods[i]->colors.row(j);
                 for ( int f = 0; f < 8; f++)
                 {
-                    faceColors.row(pos) = Eigen::Vector4d(col(0), col(1), col(2), alpha);
+                    faceColors.row(pos) = Eigen::Vector4d(col(0), col(1), col(2), transp);
                     pos++;
                 }
             }
@@ -61,21 +69,26 @@ public:
 
 
         int numConst = config->numConstraints();
-        Eigen::MatrixXd P(numConst, 3);
-        Eigen::MatrixXd C(numConst, 3);
+        Eigen::MatrixXd P = Eigen::MatrixXd::Zero(numConst, 3);
+        Eigen::MatrixXd C = Eigen::MatrixXd::Zero(numConst, 3);
+        viewer.data.set_points(P, C);
 
-        int acc_hack = 0;
         int num_colors = 7;
+        bool show = false;
 
         for (int i = 0; i < numConst; i++)
         {
             Constraint c = config->constraints[i];
             double* col = dot_colors[(c.color % num_colors)];
-            acc_hack += c.color;
-            P.row(i) = config->rods[c.rod1]->curState.centerline.row(c.seg1);
-            C.row(i) = Eigen::Vector3d(col[0], col[1], col[2]);
+
+            if (config->rods[c.rod1]->visible && config->rods[c.rod2]->visible)
+            {
+                show = true;
+                P.row(i) = config->rods[c.rod1]->curState.centerline.row(c.seg1);
+                C.row(i) = Eigen::Vector3d(col[0], col[1], col[2]);
+            }
         }
-        if (acc_hack > 3)
+        if (visualizeConstraints)
             viewer.data.set_points(P, C);
 
         viewer.core.lighting_factor = 0.;
@@ -107,6 +120,7 @@ private:
     RodConfig *config;
 
     std::string savePrefix;
+    bool visualizeConstraints;
 
     // for visualization
     Eigen::MatrixXd Q;

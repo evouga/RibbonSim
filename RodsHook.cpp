@@ -9,6 +9,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
 {
     savePrefix = "rod_";
     loadName = "../configs/torus.rod";
+    visualizeConstraints = true;
 
 
 
@@ -19,6 +20,7 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addVariable("Save Prefix", savePrefix);
     viewer.ngui->addButton("Subdivide", std::bind(&RodsHook::linearSubdivision, this));
     viewer.ngui->addButton("Export Weave", std::bind(&RodsHook::exportWeave, this));
+    viewer.ngui->addVariable("Show Constraints", visualizeConstraints);
 
     viewer.ngui->addVariable("Orientation Weight", angleWeight);
 
@@ -29,43 +31,34 @@ void RodsHook::initGUI(igl::viewer::Viewer &viewer)
     viewer.ngui->addVariable("Iteration", iter, false);
     viewer.ngui->addVariable("Force Residual", forceResidual, false);
 
-    // viewer.callback_mouse_down = [this](igl::viewer::Viewer& viewer, int, int)->bool
-    //     {
-    //         int fid;
-    //         Eigen::Vector3f bc;
-    //         // Cast a ray in the view direction starting from the mouse position
-    //         double x = viewer.current_mouse_x;
-    //         double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-    //         if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-    //             viewer.core.proj, viewer.core.viewport, this->weave->V, this->weave->F, fid, bc))
-    //         {
-    //             std::cout << fid << " - clicked on vertex #\n"; 
-    //             bool found = false;
-    //             for (int i = 0; i < (int)selectedVertices.size(); i++)
-    //             {
-    //                 if(selectedVertices[i].first == fid)
-    //                 { 
-    //                     found = true;
-    //                     if (selectedVertices[i].second < 2)
-    //                         selectedVertices[i].second++;
-    //                     else
-    //                         selectedVertices.erase(selectedVertices.begin() + i);
-    //                 }
-    //             }
-    //             if(!found && selectedVertices.size() < 2)
-    //             {
-    //                 std::pair<int, int> newsel(fid, 0);
-    //                 selectedVertices.push_back(newsel);
-    //             }
-    //             renderSelectedVertices.clear();
-    //             for (int i = 0; i < (int)selectedVertices.size(); i++)
-    //             {
-    //                 renderSelectedVertices.push_back(weave->V.row(weave->F(selectedVertices[i].first, selectedVertices[i].second)));
-    //             }
-    //             return true;
-    //         }
-    //         return false;
-    //     };
+    viewer.callback_mouse_down = [this](igl::viewer::Viewer& viewer, int, int)->bool
+        {
+            int fid;
+            Eigen::Vector3f bc;
+            // Cast a ray in the view direction starting from the mouse position
+            double x = viewer.current_mouse_x;
+            double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+            if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+                viewer.core.proj, viewer.core.viewport, this->Q, this->F, fid, bc))
+            {
+                std::cout << fid << " - clicked on face #\n"; 
+                int prevId = 0;
+                int nextId = 0;
+                for (int i = 0; i < config->numRods(); i++)
+                {
+                    nextId += config->rods[i]->numVertices() * 8;
+                    if (fid < nextId && fid > prevId)
+                    {
+                        config->rods[i]->visible = !config->rods[i]->visible;
+                        break;
+                    }
+                    prevId = nextId;
+                }
+
+                return true;
+            }
+            return false;
+        };
 }
 
 void RodsHook::initSimulation()
@@ -87,6 +80,7 @@ void RodsHook::initSimulation()
 void RodsHook::createVisualizationMesh()
 {
     config->createVisualizationMesh(Q, F);
+    exportWeave();
 }
 
 double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angleWeight, bool optimizeWidths)

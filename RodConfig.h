@@ -36,6 +36,7 @@ public:
     RodState startState;
 
     Eigen::MatrixXd colors;
+    bool visible; 
 
     Eigen::VectorXd widths;
     Eigen::VectorXd restlens;
@@ -77,6 +78,8 @@ public:
 
     std::vector<Rod *> rods;
     std::vector<Constraint> constraints;
+
+    bool showConstraints;
 };
 
 #endif

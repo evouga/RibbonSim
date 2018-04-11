@@ -148,6 +148,7 @@ void RodConfig::reset()
     for (int i = 0; i < nrods; i++)
     {
         rods[i]->curState = rods[i]->startState;
+        rods[i]->visible = true;
     }
 }
 
@@ -158,6 +159,7 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
     for (int i = 0; i < nrods; i++)
     {
         totalsegs += rods[i]->numSegments();
+        rods[i]->visible = true;
     }
     Q.resize(8 * totalsegs, 3);
     F.resize(8 * totalsegs, 3);
