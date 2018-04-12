@@ -286,7 +286,7 @@ void RodsHook::exportWeave()
         double theta = config->rods[c.rod1]->curState.thetas[i];
         Eigen::Vector3d n_r1 = d1*cos(theta) + d2*sin(theta);
 
-        Eigen::Vector3d n = r1.cross(r2);
+        Eigen::Vector3d n = r1.cross(r2).normalized();
         if ( n.dot(n_r1) < .01 )
             n *= -1;
 
