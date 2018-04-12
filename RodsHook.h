@@ -12,10 +12,11 @@ static double dot_colors[7][3] = { { .001, .001, .95 },
 class RodsHook : public PhysicsHook
 {
 public:
-    RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), dirty(true), config(NULL) {
-    }
+    RodsHook();
 
-    virtual void initGUI(igl::viewer::Viewer &viewer);
+    virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &viewer);
+
+    virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
 
     virtual void initSimulation();
     
@@ -30,14 +31,14 @@ public:
 
     virtual bool simulateOneStep();
     
-    virtual void renderRenderGeometry(igl::viewer::Viewer &viewer)
+    virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
         if (dirty)
         {
-            viewer.data.clear();
+            viewer.data().clear();
             dirty = false;
         }
-        viewer.data.set_mesh(renderQ, renderF);
+        viewer.data().set_mesh(renderQ, renderF);
 
         int faces = renderF.rows();
         faceColors.resize(faces, 4);
@@ -71,7 +72,7 @@ public:
         int numConst = config->numConstraints();
         Eigen::MatrixXd P = Eigen::MatrixXd::Zero(numConst, 3);
         Eigen::MatrixXd C = Eigen::MatrixXd::Zero(numConst, 3);
-        viewer.data.set_points(P, C);
+        viewer.data().set_points(P, C);
 
         int num_colors = 7;
         bool show = false;
@@ -89,16 +90,16 @@ public:
             }
         }
         if (visualizeConstraints)
-            viewer.data.set_points(P, C);
+            viewer.data().set_points(P, C);
 
         viewer.core.lighting_factor = 0.;
-        viewer.data.set_colors(faceColors);
+        viewer.data().set_colors(faceColors);
 
 
 
 
         if(forceEdges.rows() > 0)
-            viewer.data.set_edges(forcePoints, forceEdges, forceColors);
+            viewer.data().set_edges(forcePoints, forceEdges, forceColors);
     }
 
     void saveRods();
@@ -114,8 +115,8 @@ private:
 
     double iter;
     double forceResidual;
-    double angleWeight;
-    double newWidth;
+    float angleWeight;
+    float newWidth;
     
     RodConfig *config;
 

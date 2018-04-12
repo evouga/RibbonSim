@@ -3,7 +3,8 @@
 
 #include <mutex>
 #include <thread>
-#include <igl/viewer/Viewer.h>
+#include <igl/opengl/glfw/Viewer.h>
+#include <igl/opengl/glfw/imgui/ImGuiMenu.h>
 
 class PhysicsHook
 {
@@ -18,14 +19,20 @@ public:
     }
 
     /*
-     * Runs once when the program starts; can be used to add GUI elements for simulation parameters, etc.
-     */
-    virtual void initGUI(igl::viewer::Viewer &viewer) = 0;
+    * Runs when the user redraws/interacts with the GUI.
+    */
+    virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) = 0;
 
     /*
      * Runs once when the simulation is initialized, and again each time the user resets the simulation.
      */
     virtual void initSimulation() = 0;
+
+    /*
+    * Called every once in a while (and always before every simulation step) even if the simulation is paused.
+    * Use this to update the visualization in response to user input etc.
+    */
+    virtual void tick() {};
 
     /*
      * Takes one simulation "step." You can do whatever you want here, but the granularity of your computation should 
@@ -48,7 +55,28 @@ public:
      * extensive computation here or the UI will lag/become unresponsive (the whole reason the simulation itself
      * is in its own thread.)
      */
-    virtual void renderRenderGeometry(igl::viewer::Viewer &viewer) = 0;
+    virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer) = 0;
+
+    /*
+    * Called when the user clicks on the simulation panel.
+    * This method is called in the *rendering thread*. If you need to make changes to the simulation state, you
+    * should stash the mouse click in a message queue and deal with it in the simulation thread.
+    */
+    virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button) { return false; }
+
+    /*
+    * Called when the user unclicks the mouse on the simulation panel.
+    * This method is called in the *rendering thread*. If you need to make changes to the simulation state, you
+    * should stash the mouse click in a message queue and deal with it in the simulation thread.
+    */
+    virtual bool mouseReleased(igl::opengl::glfw::Viewer &viewer, int button) { return false; }
+
+    /*
+    * Called when the user drags the mouse on the simulation panel.
+    * This method is called in the *rendering thread*. If you need to make changes to the simulation state, you
+    * should stash the mouse click in a message queue and deal with it in the simulation thread.
+    */
+    virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer, int button) { return false; }
 
     /*
      * Runs the simulation, if it has been paused (or never started).
@@ -94,7 +122,7 @@ public:
         return ret;
     }
 
-    void render(igl::viewer::Viewer &viewer)
+    void render(igl::opengl::glfw::Viewer &viewer)
     {
         render_mutex.lock();
         renderRenderGeometry(viewer);
@@ -111,6 +139,7 @@ protected:
         bool done = false;
         while (!done)
         {
+            tick();
 
             status_mutex.lock();
             bool pausenow = please_pause;

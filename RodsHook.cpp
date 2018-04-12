@@ -1,64 +1,85 @@
 #include "RodsHook.h"
 #include "RodParser.h"
 #include "utility/simple_svg_1.0.0.hpp"
-
 #include <igl/unproject_onto_mesh.h>
+#include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
 
-
-void RodsHook::initGUI(igl::viewer::Viewer &viewer)
+RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), dirty(true), config(NULL) 
 {
     savePrefix = "rod_";
-    loadName = "../configs/torus.rod";
+    loadName = "../configs/torus4.rod";
     visualizeConstraints = true;
 
+    Q.resize(0, 3);
+    F.resize(0, 3);
+    renderQ.resize(0, 3);
+    renderF.resize(0, 3);
+}
 
-
-    viewer.ngui->addVariable("Config File", loadName);
-
-    viewer.ngui->addGroup("Sim Options");
-    viewer.ngui->addButton("Save Geometry", std::bind(&RodsHook::saveRods, this));
-    viewer.ngui->addVariable("Save Prefix", savePrefix);
-    viewer.ngui->addButton("Subdivide", std::bind(&RodsHook::linearSubdivision, this));
-    viewer.ngui->addButton("Export Weave", std::bind(&RodsHook::exportWeave, this));
-    viewer.ngui->addVariable("Show Constraints", visualizeConstraints);
-
-    viewer.ngui->addVariable("Orientation Weight", angleWeight);
-
-    viewer.ngui->addButton("Set Widths", std::bind(&RodsHook::setWidths, this));
-    viewer.ngui->addVariable("New Widths", newWidth);
-    
-    viewer.ngui->addGroup("Sim Status");
-    viewer.ngui->addVariable("Iteration", iter, false);
-    viewer.ngui->addVariable("Force Residual", forceResidual, false);
-
-    viewer.callback_mouse_down = [this](igl::viewer::Viewer& viewer, int, int)->bool
+void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
+{
+    if (ImGui::CollapsingHeader("Configuration", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputText("Config File", loadName);
+    }
+    if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::Button("Save Geometry", ImVec2(-1, 0)))
         {
-            int fid;
-            Eigen::Vector3f bc;
-            // Cast a ray in the view direction starting from the mouse position
-            double x = viewer.current_mouse_x;
-            double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-            if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-                viewer.core.proj, viewer.core.viewport, this->Q, this->F, fid, bc))
-            {
-                std::cout << fid << " - clicked on face #\n"; 
-                int prevId = 0;
-                int nextId = 0;
-                for (int i = 0; i < config->numRods(); i++)
-                {
-                    nextId += config->rods[i]->numVertices() * 8;
-                    if (fid < nextId && fid > prevId)
-                    {
-                        config->rods[i]->visible = !config->rods[i]->visible;
-                        break;
-                    }
-                    prevId = nextId;
-                }
+            saveRods();
+        }
+        ImGui::InputText("Save Prefix", savePrefix);
+        if (ImGui::Button("Subdivide", ImVec2(-1, 0)))
+        {
+            linearSubdivision();
+        }
+        if (ImGui::Button("Export Weave", ImVec2(-1, 0)))
+        {
+            exportWeave();
+        }
+        ImGui::Checkbox("Show Constraints", &visualizeConstraints);
+        ImGui::InputFloat("Orientation Weight", &angleWeight);
 
-                return true;
+        if (ImGui::Button("Set Widths", ImVec2(-1, 0)))
+        {
+            setWidths();
+        }
+        ImGui::InputFloat("New Widths", &newWidth);
+    }
+    if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Iteration %d", iter);
+        ImGui::Text("Force Residual %f", forceResidual);
+    }
+}
+
+bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
+{
+    int fid;
+    Eigen::Vector3f bc;
+    // Cast a ray in the view direction starting from the mouse position
+    double x = viewer.current_mouse_x;
+    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+        viewer.core.proj, viewer.core.viewport, this->Q, this->F, fid, bc))
+    {
+        std::cout << fid << " - clicked on face #\n";
+        int prevId = 0;
+        int nextId = 0;
+        for (int i = 0; i < config->numRods(); i++)
+        {
+            nextId += config->rods[i]->numVertices() * 8;
+            if (fid < nextId && fid > prevId)
+            {
+                config->rods[i]->visible = !config->rods[i]->visible;
+                break;
             }
-            return false;
-        };
+            prevId = nextId;
+        }
+
+        return true;
+    }
+    return false;
 }
 
 void RodsHook::initSimulation()
@@ -328,8 +349,8 @@ void RodsHook::exportWeave()
     {
         Rod *r = config->rods[i];
     //    Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
-        Polyline pl_l(Fill(Color::Transparent), Stroke(1., Color::Black));
-        Polyline pl_r(Stroke(.5, Color::Black));
+        svg::Polyline pl_l(Fill(Color::Transparent), Stroke(1., Color::Black));
+        svg::Polyline pl_r(Stroke(.5, Color::Black));
         double startpoint = 0.;
         double endpoint;
         double x_shift = i * (strip_width + strip_space);
@@ -382,18 +403,18 @@ void RodsHook::exportWeave()
                     doc << Circle( Point(endpoint, y_center), strip_width / 3., Fill(circ_col), Stroke(3., circ_col));
                 }
                 
-                Polyline mark_crossing(Fill(Color::Transparent), Stroke(3., Color::Black));
+                svg::Polyline mark_crossing(Fill(Color::Transparent), Stroke(3., Color::Black));
 
                 int mark_cidx = collisions_strip_match(i,j);
                 if (mark_cidx == (i % colorlen))
                     mark_cidx = colorlen;
                 if (collisions(i,j) < 0)
                 {
-                    mark_crossing = Polyline(Fill(Color::Transparent), Stroke(7., clist[mark_cidx]));
+                    mark_crossing = svg::Polyline(Fill(Color::Transparent), Stroke(7., clist[mark_cidx]));
                 }
                 else 
                 {
-                    mark_crossing = Polyline(Fill(Color::Transparent), Stroke(2., clist[mark_cidx]));
+                    mark_crossing = svg::Polyline(Fill(Color::Transparent), Stroke(2., clist[mark_cidx]));
                 }
 
                 Eigen::Matrix3d orient = rotations[angles(i,j)] * Eigen::MatrixXd::Identity(3,3) * strip_width / 2.;

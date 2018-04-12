@@ -1,4 +1,4 @@
-#include <igl/viewer/Viewer.h>
+#include <igl/opengl/glfw/Viewer.h>
 #include <thread>
 #include "PhysicsHook.h"
 #include "RodsHook.h"
@@ -24,7 +24,12 @@ void resetSimulation()
     hook->reset();
 }
 
-bool drawCallback(igl::viewer::Viewer &viewer)
+bool mouseDownCallback(igl::opengl::glfw::Viewer &viewer, int button, int modifier)
+{
+    return hook->mouseClicked(viewer, button);    
+}
+
+bool drawCallback(igl::opengl::glfw::Viewer &viewer)
 {
     if (!hook)
         return false;
@@ -33,7 +38,7 @@ bool drawCallback(igl::viewer::Viewer &viewer)
     return false;
 }
 
-bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
+bool keyCallback(igl::opengl::glfw::Viewer &viewer, unsigned int key, int modifiers)
 {
     if (key == ' ')
     {
@@ -43,30 +48,39 @@ bool keyCallback(igl::viewer::Viewer& viewer, unsigned int key, int modifiers)
     return false;
 }
 
-bool initGUI(igl::viewer::Viewer &viewer)
+bool drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
-    viewer.ngui->window()->setVisible(false);
-    viewer.ngui->addWindow(Eigen::Vector2i(10, 10), "Rods");
-
-    
-    viewer.ngui->addButton("Run/Pause Sim", toggleSimulation);
-    viewer.ngui->addButton("Reset Sim", resetSimulation);
-    hook->initGUI(viewer);    
-    viewer.screen->performLayout();
-    hook->reset();
+    if (ImGui::CollapsingHeader("Simulation Control", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0)))
+        {
+            toggleSimulation();
+        }
+        if (ImGui::Button("Reset Sim", ImVec2(-1, 0)))
+        {
+            resetSimulation();
+        }
+    }
+    hook->drawGUI(menu);
     return false;
 }
 
 int main(int argc, char *argv[])
 {
-  igl::viewer::Viewer viewer;
+    igl::opengl::glfw::Viewer viewer;
 
-  hook = new RodsHook();
+    hook = new RodsHook();
 
-  viewer.data.set_face_based(true);
-  viewer.core.is_animating = true;
-  viewer.callback_key_pressed = keyCallback;
-  viewer.callback_pre_draw = drawCallback;
-  viewer.callback_init = initGUI;
-  viewer.launch();
+    viewer.data().set_face_based(true);
+    viewer.core.is_animating = true;
+    viewer.callback_key_pressed = keyCallback;
+    viewer.callback_mouse_down = mouseDownCallback;
+    viewer.callback_pre_draw = drawCallback;
+    
+    igl::opengl::glfw::imgui::ImGuiMenu menu;
+    viewer.plugins.push_back(&menu);
+
+    menu.callback_draw_viewer_menu = [&]() {drawGUI(menu); };
+    resetSimulation();
+    viewer.launch();
 }
