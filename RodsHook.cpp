@@ -9,6 +9,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1
     savePrefix = "rod_";
     loadName = "../configs/torus4.rod";
     visualizeConstraints = true;
+    allowSliding = false;
 
     Q.resize(0, 3);
     F.resize(0, 3);
@@ -22,7 +23,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         ImGui::InputText("Config File", loadName);
     }
-    if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Rod Controls", ImGuiTreeNodeFlags_DefaultOpen))
     {
         if (ImGui::Button("Save Geometry", ImVec2(-1, 0)))
         {
@@ -38,7 +39,6 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             exportWeave();
         }
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
-        ImGui::InputFloat("Orientation Weight", &angleWeight);
 
         if (ImGui::Button("Set Widths", ImVec2(-1, 0)))
         {
@@ -46,6 +46,13 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         ImGui::InputFloat("New Widths", &newWidth);
     }
+
+    if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputFloat("Orientation Weight", &angleWeight);
+        ImGui::Checkbox("Allow Sliding", &allowSliding);
+    }
+
     if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Iteration %d", iter);
@@ -93,6 +100,7 @@ void RodsHook::initSimulation()
     config = readRod(loadName.c_str());
     if (!config)
         exit(-1);
+    centerScene();
    
     createVisualizationMesh();
     dirty = true;
@@ -104,7 +112,7 @@ void RodsHook::createVisualizationMesh()
     exportWeave();
 }
 
-double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angleWeight, bool optimizeWidths)
+double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angleWeight, bool allowSliding)
 {
     double t = 1.0;
     double c1 = 0.1;
@@ -115,17 +123,19 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
 
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> J;
-    rAndJ(config, r, &J, angleWeight, optimizeWidths);
-    
+    rAndJ(config, r, &J, angleWeight, allowSliding);
+
     Eigen::VectorXd dE;
     Eigen::VectorXd newdE;
     std::vector<RodState> start;
+    std::vector<Constraint> startC;
     std::vector<Eigen::VectorXd> startWidths;
     for (int i = 0; i < config.numRods(); i++)
     {
         start.push_back(config.rods[i]->curState);
         startWidths.push_back(config.rods[i]->widths);
     }
+    startC = config.constraints;
     double orig = 0.5 * r.transpose() * r;
     dE = J.transpose() * r;
     double deriv = -dE.dot(update);
@@ -136,40 +146,36 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
     while (true)
     {
         int nrods = config.numRods();
+        int nconstraints = config.numConstraints();
         int dofoffset = 0;
         for (int rod = 0; rod < nrods; rod++)
         {
             int nverts = config.rods[rod]->numVertices();
             int nsegs = config.rods[rod]->numSegments();
-            if(!optimizeWidths)
+            for (int i = 0; i < nsegs; i++)
             {
-                for (int i = 0; i < nsegs; i++)
-                {
-                    Eigen::Vector3d oldv1 =start[rod].centerline.row(i);
-                    Eigen::Vector3d oldv2 = start[rod].centerline.row((i + 1) % nverts);
-                    Eigen::Vector3d v1 = oldv1 - t * update.segment<3>(dofoffset + 3 * i);
-                    Eigen::Vector3d v2 = oldv2 - t * update.segment<3>(dofoffset + 3 * ((i + 1) % nverts));
+                Eigen::Vector3d oldv1 = start[rod].centerline.row(i);
+                Eigen::Vector3d oldv2 = start[rod].centerline.row((i + 1) % nverts);
+                Eigen::Vector3d v1 = oldv1 - t * update.segment<3>(dofoffset + 3 * i);
+                Eigen::Vector3d v2 = oldv2 - t * update.segment<3>(dofoffset + 3 * ((i + 1) % nverts));
 
-                    config.rods[rod]->curState.directors.row(i) = parallelTransport(start[rod].directors.row(i), oldv2 - oldv1, v2 - v1);
-                }
-                for (int i = 0; i < nverts; i++)
-                    config.rods[rod]->curState.centerline.row(i) = start[rod].centerline.row(i) - t * update.segment<3>(dofoffset + 3 * i).transpose();
-                for (int i = 0; i < nsegs; i++)
-                {
-                    config.rods[rod]->curState.thetas[i] = start[rod].thetas[i] - t * update[dofoffset + 3 * nverts + i];
-                }
+                config.rods[rod]->curState.directors.row(i) = parallelTransport(start[rod].directors.row(i), oldv2 - oldv1, v2 - v1);
             }
-            else
+            for (int i = 0; i < nverts; i++)
+                config.rods[rod]->curState.centerline.row(i) = start[rod].centerline.row(i) - t * update.segment<3>(dofoffset + 3 * i).transpose();
+            for (int i = 0; i < nsegs; i++)
             {
-                for (int i = 0; i < nsegs; i++)
-                {
-                    double newwidth = startWidths[rod][i] - t * update[dofoffset + 3 * nverts + nsegs + i];
-                    config.rods[rod]->widths[i] = newwidth;
-                }
+                config.rods[rod]->curState.thetas[i] = start[rod].thetas[i] - t * update[dofoffset + 3 * nverts + i];
             }
             dofoffset += 3 * nverts + 2 * nsegs;
         }
-        rAndJ(config, r, &J, angleWeight, optimizeWidths);
+        for (int i = 0; i < nconstraints; i++)
+        {
+            config.constraints[i].bary1 = startC[i].bary1 - t * update[dofoffset + 2 * i];
+            config.constraints[i].bary2 = startC[i].bary2 - t * update[dofoffset + 2 * i + 1];
+        }
+
+        rAndJ(config, r, &J, angleWeight, allowSliding);
 
         double newenergy = 0.5 * r.transpose() * r;
         newdE = J.transpose() * r;
@@ -205,11 +211,33 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
     }
 }
 
+void RodsHook::centerScene()
+{
+    Eigen::Vector3d centroid(0, 0, 0);
+    int nverts = 0;
+    for (int i = 0; i < config->numRods(); i++)
+    {
+        for (int j = 0; j < config->rods[i]->numVertices(); j++)
+        {
+            centroid += config->rods[i]->curState.centerline.row(j).transpose();
+            nverts++;
+        }
+    }
+    centroid /= nverts;
+    for (int i = 0; i < config->numRods(); i++)
+    {
+        for (int j = 0; j < config->rods[i]->numVertices(); j++)
+        {
+            config->rods[i]->curState.centerline.row(j) -= centroid;
+        }
+    }
+}
+
 bool RodsHook::simulateOneStep()
 {
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> Jr;
-    rAndJ(*config, r, &Jr, angleWeight, false);
+    rAndJ(*config, r, &Jr, angleWeight, allowSliding);
 
     std::cout << "Orig energy: " << 0.5 * r.transpose() * r << std::endl;
     Eigen::SparseMatrix<double> mat = Jr.transpose() * Jr;
@@ -224,7 +252,10 @@ bool RodsHook::simulateOneStep()
     if (solver.info() != Eigen::Success)
         exit(-1);
     std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
-    forceResidual = lineSearch(*config, delta, angleWeight, false);
+    forceResidual = lineSearch(*config, delta, angleWeight, allowSliding);
+
+    centerScene();
+
     iter++;
 
     createVisualizationMesh();    

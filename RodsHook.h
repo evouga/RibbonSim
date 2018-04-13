@@ -109,15 +109,17 @@ private:
     void createVisualizationMesh();
     void showConstraints();
     void linearSubdivision();
-    void exportWeave();
+    void exportWeave();    
+    void centerScene();
 
     std::string loadName;
 
-    double iter;
+    int iter;
     double forceResidual;
     float angleWeight;
+    bool allowSliding;
     float newWidth;
-    
+
     RodConfig *config;
 
     std::string savePrefix;
