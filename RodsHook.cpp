@@ -3,6 +3,7 @@
 #include "utility/simple_svg_1.0.0.hpp"
 #include <igl/unproject_onto_mesh.h>
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
+#include <Eigen/Dense>
 
 RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), dirty(true), config(NULL) 
 {
@@ -212,21 +213,44 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
 void RodsHook::centerScene()
 {
     Eigen::Vector3d centroid(0, 0, 0);
+    Eigen::Vector3d origcentroid(0, 0, 0);
     int nverts = 0;
     for (int i = 0; i < config->numRods(); i++)
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
         {
             centroid += config->rods[i]->curState.centerline.row(j).transpose();
+            origcentroid += config->rods[i]->startState.centerline.row(j).transpose();
             nverts++;
         }
     }
     centroid /= nverts;
+    origcentroid /= nverts;
+    Eigen::MatrixXd A(3, nverts);
+    Eigen::MatrixXd B(3, nverts);
+    int idx = 0;
     for (int i = 0; i < config->numRods(); i++)
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
         {
             config->rods[i]->curState.centerline.row(j) -= centroid;
+            A.col(idx) = config->rods[i]->curState.centerline.row(j).transpose();
+            B.col(idx) = config->rods[i]->startState.centerline.row(j).transpose() - origcentroid;
+            idx++;
+        }
+    }
+    Eigen::Matrix3d M = B*A.transpose();
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::Matrix3d R = svd.matrixU() * svd.matrixV().transpose();
+    for (int i = 0; i < config->numRods(); i++)
+    {
+        for (int j = 0; j < config->rods[i]->numVertices(); j++)
+        {
+            config->rods[i]->curState.centerline.row(j) = config->rods[i]->curState.centerline.row(j) * R.transpose();            
+        }
+        for (int j = 0; j < config->rods[i]->numSegments(); j++)
+        {
+            config->rods[i]->curState.directors.row(j) = config->rods[i]->curState.directors.row(j) * R.transpose();
         }
     }
 }
