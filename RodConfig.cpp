@@ -20,10 +20,7 @@ Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams
         Eigen::Vector3d e = (v2 - v1);
         e /= e.norm();
         double dotprod = e.dot(startState.directors.row(i));
-        if (fabs(dotprod) > 1e-6)
-        {
-            std::cerr << "Warning: directors not orthogonal to edge" << std::endl;
-        }
+        assert(fabs(dotprod) < 1e-6);
     }
     curState = startState;
     widths = segwidths;

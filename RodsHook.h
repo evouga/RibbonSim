@@ -111,6 +111,7 @@ private:
     void linearSubdivision();
     void exportWeave();    
     void centerScene();
+    void slideConstraints();
 
     std::string loadName;
 

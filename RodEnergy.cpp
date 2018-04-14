@@ -28,6 +28,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
 
     nterms += 6 * config.constraints.size(); // constraint positions
     nterms += config.constraints.size(); // constraint directions
+    nterms += 4 * config.constraints.size(); // barycentric coord inequality constraints
 
     r.resize(nterms);
     r.setConstant(std::numeric_limits<double>::infinity());
@@ -368,6 +369,56 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
     }
 
     roffset += nconstraints;
+    double penstiffness = 1e3;
+    for (int i = 0; i < nconstraints; i++)
+    {
+        if (!allowSliding)
+        {
+            for(int j=0; j<4; j++)
+                r[roffset + 4 * i + j] = 0;            
+        }
+        else
+        {
+            Constraint &c = config.constraints[i];
+            if (c.bary1 > 0)
+            {
+                r[roffset + 4 * i + 0] = 0;
+            }
+            else
+            {
+                r[roffset + 4 * i + 0] = penstiffness * c.bary1;
+                J.push_back(Eigen::Triplet<double>(roffset + 4 * i + 0, baryoffset + 2 * i, penstiffness));
+            }
+            if (c.bary1 < 1.0)
+            {
+                r[roffset + 4 * i + 1] = 0;
+            }            
+            else
+            {
+                r[roffset + 4 * i + 1] = penstiffness * (c.bary1 - 1.0);
+                J.push_back(Eigen::Triplet<double>(roffset + 4 * i + 1, baryoffset + 2 * i, penstiffness));
+            }
+            if (c.bary2 > 0)
+            {
+                r[roffset + 4 * i + 2] = 0;
+            }
+            else
+            {
+                r[roffset + 4 * i + 2] = penstiffness * c.bary2;
+                J.push_back(Eigen::Triplet<double>(roffset + 4 * i + 2, baryoffset + 2 * i + 1, penstiffness));
+            }
+            if (c.bary2 < 1.0)
+            {
+                r[roffset + 4 * i + 3] = 0;
+            }            
+            else
+            {
+                r[roffset + 4 * i + 3] = penstiffness * (c.bary2 - 1.0);
+                J.push_back(Eigen::Triplet<double>(roffset + 4 * i + 3, baryoffset + 2 * i + 1, penstiffness));
+            }
+        }
+    }
+    roffset += 4 * nconstraints;
 
     if (roffset != nterms)
         exit(-1);

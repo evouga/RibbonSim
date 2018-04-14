@@ -123,17 +123,15 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
 
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> J;
-    rAndJ(config, r, &J, angleWeight, allowSliding);
+    rAndJ(config, r, &J, angleWeight, allowSliding);  
 
     Eigen::VectorXd dE;
     Eigen::VectorXd newdE;
     std::vector<RodState> start;
     std::vector<Constraint> startC;
-    std::vector<Eigen::VectorXd> startWidths;
     for (int i = 0; i < config.numRods(); i++)
     {
         start.push_back(config.rods[i]->curState);
-        startWidths.push_back(config.rods[i]->widths);
     }
     startC = config.constraints;
     double orig = 0.5 * r.transpose() * r;
@@ -171,8 +169,8 @@ double lineSearch(RodConfig &config, const Eigen::VectorXd &update, double angle
         }
         for (int i = 0; i < nconstraints; i++)
         {
-            config.constraints[i].bary1 = startC[i].bary1 - t * update[dofoffset + 2 * i];
-            config.constraints[i].bary2 = startC[i].bary2 - t * update[dofoffset + 2 * i + 1];
+            config.constraints[i].bary1 = startC[i].bary1 - t * update[dofoffset + 2 * i];           
+            config.constraints[i].bary2 = startC[i].bary2 - t * update[dofoffset + 2 * i + 1];            
         }
 
         rAndJ(config, r, &J, angleWeight, allowSliding);
@@ -233,6 +231,73 @@ void RodsHook::centerScene()
     }
 }
 
+void RodsHook::slideConstraints()
+{
+    int nconstraints = config->numConstraints();
+    std::vector<int> todelete;
+    for (int i = 0; i < nconstraints; i++)
+    {
+        Constraint &c = config->constraints[i];
+        if (c.bary1 < 0)
+        {
+            if (config->rods[c.rod1]->isClosed() || c.seg1 > 0)
+            {
+                c.seg1 = (c.seg1 + config->rods[c.rod1]->numSegments() - 1) % config->rods[c.rod1]->numSegments();
+                c.bary1 = 1.0;
+            }
+            else
+            {
+                todelete.push_back(i);
+                continue;
+            }
+        }
+        else if (c.bary1 > 1.0)
+        {
+            if (config->rods[c.rod1]->isClosed() || c.seg1 < config->rods[c.rod1]->numSegments()-1)
+            {
+                c.seg1 = (c.seg1 + 1) % config->rods[c.rod1]->numSegments();
+                c.bary1 = 0.0;
+            }
+            else
+            {
+                todelete.push_back(i);
+                continue;
+            }
+        }
+        if (c.bary2 < 0)
+        {
+            if (config->rods[c.rod2]->isClosed() || c.seg2 > 0)
+            {
+                c.seg2 = (c.seg2 + config->rods[c.rod2]->numSegments() - 1) % config->rods[c.rod2]->numSegments();
+                c.bary2 = 1.0;
+            }
+            else
+            {
+                todelete.push_back(i);
+                continue;
+            }
+        }
+        else if (c.bary2 > 1.0)
+        {
+            if (config->rods[c.rod2]->isClosed() || c.seg2 < config->rods[c.rod2]->numSegments()-1)
+            {
+                c.seg2 = (c.seg2 + 1) % config->rods[c.rod2]->numSegments();
+                c.bary2 = 0.0;
+            }
+            else
+            {
+                todelete.push_back(i);
+                continue;
+            }
+        }
+    }
+
+    for (std::vector<int>::reverse_iterator it = todelete.rbegin(); it != todelete.rend(); ++it)
+    {
+        config->constraints.erase(config->constraints.begin() + *it);
+    }
+}
+
 bool RodsHook::simulateOneStep()
 {
     Eigen::VectorXd r;
@@ -252,8 +317,9 @@ bool RodsHook::simulateOneStep()
     if (solver.info() != Eigen::Success)
         exit(-1);
     std::cout << "Solver residual: " << (mat*delta - rhs).norm() << std::endl;
-    forceResidual = lineSearch(*config, delta, angleWeight, allowSliding);
 
+    forceResidual = lineSearch(*config, delta, angleWeight, allowSliding);
+    slideConstraints();
     centerScene();
 
     iter++;
