@@ -423,9 +423,9 @@ void RodsHook::exportWeave()
         r2.normalize();
 
 
-        Eigen::Vector3d d1 = config->rods[c.rod1]->curState.directors.row(i);
+        Eigen::Vector3d d1 = config->rods[c.rod1]->curState.directors.row(c.seg1);
         Eigen::Vector3d d2 = r1.cross(d1);
-        double theta = config->rods[c.rod1]->curState.thetas[i];
+        double theta = config->rods[c.rod1]->curState.thetas[c.seg1];
         Eigen::Vector3d n_r1 = d1*cos(theta) + d2*sin(theta);
 
         Eigen::Vector3d n = r1.cross(r2).normalized();
@@ -683,6 +683,7 @@ void RodsHook::linearSubdivision()
     }
     config->constraints = newconstraints;
     config->initWeave();
+    centerScene();
     createVisualizationMesh();
     updateRenderGeometry();
 }
