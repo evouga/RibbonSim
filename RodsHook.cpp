@@ -242,6 +242,13 @@ void RodsHook::centerScene()
     Eigen::Matrix3d M = B*A.transpose();
     Eigen::JacobiSVD<Eigen::Matrix3d> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
     Eigen::Matrix3d R = svd.matrixU() * svd.matrixV().transpose();
+    if (R.determinant() < 0)
+    {
+        Eigen::Matrix3d sigma;
+        sigma.setIdentity();
+        sigma(2, 2) = -1;
+        R = svd.matrixU() * sigma * svd.matrixV().transpose();
+    }
     for (int i = 0; i < config->numRods(); i++)
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
