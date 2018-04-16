@@ -238,7 +238,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
                 Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
                 Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
                 J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * config.rods[c.rod1]->numSegments() + c.seg1, c.assignment * sqrt(0.5*c.stiffness) * config.rods[c.rod1]->params.thickness * Dd1[j]));
-                if (allowSliding)
+                if (allowSliding && c.rod1 != c.rod2)
                 {
                     J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, sqrt(0.5*c.stiffness) * (p2 - p1)[j]));
                     J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -sqrt(0.5*c.stiffness) * (q2 - q1)[j]));
@@ -300,7 +300,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
                 Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
                 J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * config.rods[c.rod2]->numSegments() + c.seg2, c.assignment * sqrt(0.5*c.stiffness) * config.rods[c.rod2]->params.thickness * Dd2[j]));
 
-                if (allowSliding)
+                if (allowSliding && c.rod1 != c.rod2)
                 {
                     J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, sqrt(0.5*c.stiffness) * (p2 - p1)[j]));
                     J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -sqrt(0.5*c.stiffness) * (q2 - q1)[j]));
@@ -372,7 +372,8 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
     double penstiffness = 1e3;
     for (int i = 0; i < nconstraints; i++)
     {
-        if (!allowSliding)
+        const Constraint &c = config.constraints[i];
+        if (!allowSliding || c.rod1 == c.rod2)
         {
             for(int j=0; j<4; j++)
                 r[roffset + 4 * i + j] = 0;            
