@@ -9,7 +9,7 @@
 RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), dirty(true), config(NULL) 
 {
     savePrefix = "rod_";
-    loadName = "../configs/torus4.rod";
+    loadName = "../configs/torus7.rod";
     targetMeshName = "../meshes/torus.obj";
     visualizeConstraints = true;
     allowSliding = false;
@@ -590,6 +590,12 @@ void RodsHook::exportWeave()
             self_intersect(c.rod1, c.seg1) = 1;
             self_intersect(c.rod2, c.seg2) = 1;
         } 
+
+        if ( !config->rods[c.rod1]->visible || !config->rods[c.rod2]->visible )
+        {
+            self_intersect(c.rod1, c.seg1) = -1;
+            self_intersect(c.rod2, c.seg2) = -1;
+        }
         match_iter = (match_iter + 3) % (colorlen * 3);
         Eigen::Vector3d r1 = config->rods[c.rod1]->curState.centerline.row(c.seg1) - 
                              config->rods[c.rod1]->curState.centerline.row(c.seg1 + 1); 
@@ -688,7 +694,8 @@ void RodsHook::exportWeave()
             if ( collisions(i,j) != 0) 
             { 
                 double y_center = i * (strip_width + strip_space) + .5 * strip_width;
-                if ( self_intersect(i,j) > 0 )
+                if ( self_intersect(i,j) == -1 ) {}
+                else if ( self_intersect(i,j) > 0 )
                 {
                     doc << Circle( Point(endpoint, y_center), strip_width / 2., Fill(Color::Fuchsia), Stroke(3., Color::Fuchsia));
                 }
@@ -737,19 +744,20 @@ void RodsHook::exportWeave()
                               << Point( endpoint + pos_x(0) - pos_y(0) * (1 - (tan(angles(i, j)) * strip_width / 2.)),   pos_x(1) - pos_y(1) * (1 - (tan(angles(i, j)) * strip_width / 2.)) + y_center )
                               << Point( endpoint - pos_x(0) - pos_y(0) * (1 + (tan(angles(i, j)) * strip_width / 2.)), - pos_x(1) - pos_y(1) * (1 + (tan(angles(i, j)) * strip_width / 2.)) + y_center )
                               << Point( endpoint - pos_x(0) + pos_y(0) * (1 - (tan(angles(i, j)) * strip_width / 2.)), - pos_x(1) + pos_y(1) * (1 - (tan(angles(i, j)) * strip_width / 2.)) + y_center );*/
+                if ( self_intersect(i,j) == -1 ) {}
+                else {
+                    doc << mark_crossing;
 
-                doc << mark_crossing;
-
-                char shift = collisions_circ_match(i,j) + 'a';
-                doc << svg::Text(Point(endpoint - 5, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(8, "Verdana"));
-                doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(8, "Verdana"));
-                lasttext = endpoint;
-
+                    char shift = collisions_circ_match(i,j) + 'a';
+                    doc << svg::Text(Point(endpoint - 10, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(10, "Verdana"));
+                    doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2 + strip_width / 2.), std::to_string(abs(collisions(i,j))) + shift, Color::White, Font(10, "Verdana"));
+                    lasttext = endpoint;
+                }
             } 
             if (lasttext < endpoint - label_spacing) 
             {
      //           std::cout << endpoint << "\n";
-                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 6), std::to_string(i + 1), Color::White, Font(12, "Verdana"));
+                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 6), std::to_string(i + 1), Color::White, Font(14, "Verdana"));
                 lasttext = endpoint;
             }
         }

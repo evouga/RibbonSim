@@ -425,7 +425,8 @@ void rAndJ(RodConfig &config,
     double penstiffness = 1e3;
     for (int i = 0; i < nconstraints; i++)
     {
-        if (!allowSliding)
+        const Constraint &c = config.constraints[i];
+        if (!allowSliding || c.rod1 == c.rod2)
         {
             for(int j=0; j<4; j++)
                 r[roffset + 4 * i + j] = 0;            
