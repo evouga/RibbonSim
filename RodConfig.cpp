@@ -232,7 +232,7 @@ void RodConfig::setVisualizationMeshColors()
     {
         for (int j = 0; j < rods[i]->numSegments(); j++)
         {
-            double curPos = rods[i]->startState.centerline(j, 1);
+            double curPos = rods[i]->startState.centerline(j, 2);
             if ( minZ > curPos )
             {
                 minZ = curPos;
@@ -245,26 +245,26 @@ void RodConfig::setVisualizationMeshColors()
     }
 
 
-    int num_colors = 7;
+
     for (int i = 0; i < numRods(); i++)
     {
         Eigen::MatrixXd col = Eigen::MatrixXd::Zero(rods[i]->numSegments(), 3);
         for (int j = 0; j < rods[i]->numSegments(); j++)
         {
-          double zLevel = rods[i]->startState.centerline(j , 1);
+          double zLevel = rods[i]->startState.centerline(j , 2);
           double scale = (maxZ - zLevel) / (maxZ - minZ);
 
           double tscale = (zLevel - minZ) / (maxZ - minZ);
           double highlight = tscale * tscale * tscale * tscale * .5;
 
-          double* c = face_colors[(i % num_colors)];
+          double* c = face_colors[rods[i]->colorId];
           if ( scale > .995 )
           {
-            c = face_colors[num_colors];
+        //    c = face_colors[num_colors];
           }
           else if ( scale < .008 )
           {
-            c = face_colors[num_colors + 1];
+       //     c = face_colors[num_colors + 1];
             scale = 1.;
             tscale = 1.;
           }

@@ -35,7 +35,9 @@ public:
     RodState curState;
     RodState startState;
 
-    Eigen::MatrixXd colors;
+    int colorId;
+    double colorMod; 
+    Eigen::MatrixXd colors; 
     bool visible; 
 
     Eigen::VectorXd widths;
@@ -78,6 +80,8 @@ public:
 
     std::vector<Rod *> rods;
     std::vector<Constraint> constraints;
+
+    int num_colors = 7; // make this less hacky...
 
     bool showConstraints;
 };

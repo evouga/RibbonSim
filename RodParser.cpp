@@ -180,6 +180,13 @@ RodConfig *readRod(const char *filename)
         }
     }
 
+    for(int i=0; i<nrods; i++)
+    {
+        int num_cols = ret->num_colors;
+        ret->rods[i]->colorId = (i % num_cols);
+        ret->rods[i]->colorMod = 0.;
+    }
+
     if (!ifs)
         exit(-1);
     return ret;

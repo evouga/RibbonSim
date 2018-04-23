@@ -369,7 +369,7 @@ void rAndJ(RodConfig &config, Eigen::VectorXd &r, Eigen::SparseMatrix<double> *J
     }
 
     roffset += nconstraints;
-    double penstiffness = 1e3;
+    double penstiffness = 1e4;
     for (int i = 0; i < nconstraints; i++)
     {
         const Constraint &c = config.constraints[i];

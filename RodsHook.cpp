@@ -79,7 +79,17 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
             nextId += config->rods[i]->numVertices() * 8;
             if (fid < nextId && fid > prevId)
             {
-                config->rods[i]->visible = !config->rods[i]->visible;
+                if ( button == 0 )
+                {
+                    config->rods[i]->visible = !config->rods[i]->visible;
+                }
+                else 
+                {
+                    int num_cols = config->num_colors;
+                    config->rods[i]->colorId = ( config->rods[i]->colorId + 1 ) % num_cols; 
+                    config->setVisualizationMeshColors();
+                }
+
                 break;
             }
             prevId = nextId;
@@ -404,8 +414,8 @@ void RodsHook::exportWeave()
         Constraint c = config->constraints[i];
         collisions(c.rod1, c.seg1) = (1 + c.rod2) * c.assignment;
         collisions(c.rod2, c.seg2) = (1 + c.rod1) * c.assignment * -1;
-        collisions_strip_match(c.rod1, c.seg1) = c.rod2 % colorlen;//match_iter;
-        collisions_strip_match(c.rod2, c.seg2) = c.rod1 % colorlen;//match_iter;
+        collisions_strip_match(c.rod1, c.seg1) = config->rods[c.rod2]->colorId;//match_iter;
+        collisions_strip_match(c.rod2, c.seg2) = config->rods[c.rod1]->colorId;//match_iter;
         collisions_circ_match(c.rod1, c.seg1) = match_iter;
         collisions_circ_match(c.rod2, c.seg2) = match_iter;
         config->constraints[i].color = match_iter;
@@ -534,7 +544,7 @@ void RodsHook::exportWeave()
                 svg::Polyline mark_crossing(Fill(Color::Transparent), Stroke(3., Color::Black));
 
                 int mark_cidx = collisions_strip_match(i,j);
-                if (mark_cidx == (i % colorlen))
+                if ( mark_cidx == config->rods[i]->colorId )
                     mark_cidx = colorlen;
                 if (collisions(i,j) < 0)
                 {
