@@ -6,12 +6,14 @@
 #include <Eigen/Dense>
 #include <igl/point_mesh_squared_distance.h>
 
-RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), dirty(true), config(NULL) 
+RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), 
+                                      dirty(true), config(NULL), expLenScale(1.0) 
 {
     savePrefix = "rod_";
     loadName = "../configs/torus7.rod";
     targetMeshName = "../meshes/torus.obj";
     visualizeConstraints = true;
+    visualizeTargetMesh = true;
     allowSliding = false;
     stickToMesh = false;
 
@@ -42,6 +44,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             exportWeave();
         }
+        ImGui::InputFloat("Export Length Scale", &expLenScale);
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
         bool oldVisuaizeTargetMesh = visualizeTargetMesh;
         ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh);
@@ -144,6 +147,30 @@ void RodsHook::loadTargetMesh()
         targetV.resize(0, 3);
         targetF.resize(0, 3);
     }
+
+    Eigen::Vector3d centroid(0, 0, 0);
+    // int nverts = 0;
+    // for (int i = 0; i < config->numRods(); i++)
+    // {
+    //     for (int j = 0; j < config->rods[i]->numVertices(); j++)
+    //     {
+    //         centroid += config->rods[i]->curState.centerline.row(j).transpose();
+    //         nverts++;
+    //     }
+    // }
+
+    for (int i = 0; i < targetV.rows(); i++)
+    {
+        centroid += targetV.row(i);
+    }
+    centroid /= targetV.rows();
+    std::cout << centroid << "\n";
+
+    for (int i = 0; i < targetV.rows(); i++)
+    {
+        targetV.row(i) -= centroid;
+    }
+    createVisualizationMesh();
     updateRenderGeometry();
 }
 
@@ -272,7 +299,8 @@ void RodsHook::centerScene()
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
         {
-            config->rods[i]->curState.centerline.row(j) -= centroid;
+            config->rods[i]->curState.centerline.row(j) -= centroid - origcentroid;
+       //     config->rods[i]->startState.centerline.row(j) -= origcentroid;
             A.col(idx) = config->rods[i]->curState.centerline.row(j).transpose();
             B.col(idx) = config->rods[i]->startState.centerline.row(j).transpose() - origcentroid;
             idx++;
@@ -288,11 +316,19 @@ void RodsHook::centerScene()
         sigma(2, 2) = -1;
         R = svd.matrixU() * sigma * svd.matrixV().transpose();
     }
+
+    if (visualizeTargetMesh)
+    {
+        for (int i = 0; i < targetV.rows(); i++)
+        {
+        //    targetV.row(i) = targetV.row(i) * R.transpose();  
+        }
+    }
     for (int i = 0; i < config->numRods(); i++)
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
         {
-            config->rods[i]->curState.centerline.row(j) = config->rods[i]->curState.centerline.row(j) * R.transpose();            
+            config->rods[i]->curState.centerline.row(j) = config->rods[i]->curState.centerline.row(j) * R.transpose();          
         }
         for (int j = 0; j < config->rods[i]->numSegments(); j++)
         {
@@ -550,13 +586,14 @@ void RodsHook::exportWeave()
 {
     double strip_width = 45.;
     double strip_space = 10.;
-    double strip_stretch = 600.;
+    double strip_stretch = 600. * expLenScale;
     double label_spacing = 90.;
 
     enum Defaults { Transparent = -1, Aqua, Black, Blue, Brown, Cyan, Fuchsia,
         Green, Lime, Magenta, Orange, Purple, Red, Silver, White, Yellow };
 
     Color clist[] = {Color::Blue, Color::Red, Color::Yellow, Color::Lime, Color::Orange, Color::Purple, Color::Cyan, Color::Black};
+    char clist_char[] = {'b', 'r', 'y', 'g', 'o', 'p', 'c', 'B'};
     int colorlen = 7;
 
     double maxlen = 0;
@@ -662,7 +699,7 @@ void RodsHook::exportWeave()
     {
         Rod *r = config->rods[i];
     //    Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
-        svg::Polyline pl_l(Fill(Color::Transparent), Stroke(1., Color::Black));
+        svg::Polyline pl_l(Fill(Color::Transparent), Stroke(4., Color::Black));
         svg::Polyline pl_r(Stroke(.5, Color::Black));
         double startpoint = 0.;
         double endpoint;
@@ -757,8 +794,7 @@ void RodsHook::exportWeave()
                 if ( self_intersect(i,j) == -1 ) {}
                 else {
                     doc << mark_crossing;
-
-                    char shift = collisions_circ_match(i,j) + 'a';
+                    char shift = clist_char[collisions_circ_match(i,j) % colorlen];
                     doc << svg::Text(Point(endpoint - 10, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(10, "Verdana"));
                     doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2 + strip_width / 2.), std::to_string(abs(collisions(i,j))) + shift, Color::White, Font(10, "Verdana"));
                     lasttext = endpoint;
@@ -767,7 +803,7 @@ void RodsHook::exportWeave()
             if (lasttext < endpoint - label_spacing) 
             {
      //           std::cout << endpoint << "\n";
-                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 6), std::to_string(i + 1), Color::White, Font(14, "Verdana"));
+                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 9), std::to_string(i + 1), Color::White, Font(14, "Verdana"));
                 lasttext = endpoint;
             }
         }
@@ -776,6 +812,12 @@ void RodsHook::exportWeave()
     } 
     
     doc.save();
+
+    std::ofstream ofs("my_svg_colors.txt");
+    for (int i = 0; i < config->numRods(); i++) 
+    {
+        ofs << config->rods[i]->colorId << " ";
+    }
 
 }
 

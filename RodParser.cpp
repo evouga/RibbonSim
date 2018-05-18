@@ -41,6 +41,8 @@ RodConfig *readRod(const char *filename)
             for (int k = 0; k < 3; k++)
             {
                 ifs >> rs.centerline(j, k);
+                // if (k == 1)
+                //     rs.centerline(j, k) -= 1;
             }
         }        
         rs.centerlineVel.resize(nverts, 3);

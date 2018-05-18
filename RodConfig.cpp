@@ -260,11 +260,11 @@ void RodConfig::setVisualizationMeshColors()
           double* c = face_colors[rods[i]->colorId];
           if ( scale > .995 )
           {
-        //    c = face_colors[num_colors];
+            c = face_colors[num_colors];
           }
           else if ( scale < .008 )
           {
-       //     c = face_colors[num_colors + 1];
+            c = face_colors[num_colors + 1];
             scale = 1.;
             tscale = 1.;
           }

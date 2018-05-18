@@ -163,6 +163,7 @@ private:
     float angleWeight;
     bool allowSliding;
     float newWidth;
+    float expLenScale;
 
     RodConfig *config;
 
