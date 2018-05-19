@@ -4,7 +4,7 @@
 #include <igl/writeOBJ.h>
 #include <Eigen/Geometry>
 
-Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed) : startState(startState), params(params), isClosed_(isClosed)
+Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed, int colorID) : startState(startState), params(params), isClosed_(isClosed), visible_(true), colorID_(colorID)
 {
     int nverts = startState.centerline.rows();
     int nsegs = isClosed ? nverts : nverts - 1;
@@ -57,6 +57,19 @@ void Rod::initializeRestQuantities()
         double mass = widths[i]*params.thickness*len*params.rho;
         momInertia[i] = mass / 12.0 * (widths[i]*widths[i] + params.thickness*params.thickness);
     }
+}
+
+Eigen::Vector3d Rod::rodColor() const
+{
+    Eigen::Vector3d ret;
+    for (int i = 0; i < 3; i++)
+        ret[i] = rod_colors[colorID_][i];
+    return ret;
+}
+
+void Rod::cycleColor()
+{
+    colorID_ = (colorID_ + 1) % num_rod_colors;
 }
 
 RodConfig::~RodConfig()
@@ -148,7 +161,7 @@ void RodConfig::reset()
     for (int i = 0; i < nrods; i++)
     {
         rods[i]->curState = rods[i]->startState;
-        rods[i]->visible = true;
+        rods[i]->setVisible(true);
     }
 }
 
@@ -159,7 +172,6 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
     for (int i = 0; i < nrods; i++)
     {
         totalsegs += rods[i]->numSegments();
-        rods[i]->visible = true;
     }
     Q.resize(8 * totalsegs, 3);
     F.resize(8 * totalsegs, 3);
@@ -211,75 +223,57 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
         }
         offset += 8 * rods[rod]->numSegments();
     }
-    setVisualizationMeshColors();
 }
 
-static double face_colors[9][3] = { { .001, .001, .95 },
-                                          { 0.95, 0.001, 0.001 },
-                                          { 0.95, 0.95, 0.001 },
-                                          { 0.01, 0.95, 0.01 },
-                                          { 0.95, 0.7, 0.01 },
-                                          { 0.5, 0.01, 0.5 },
-                                          { 0.001, 0.95, 0.95 },
-                                          { .5, 0, 0},
-                                          {.7, .7, .2 } };
-
-void RodConfig::setVisualizationMeshColors()
+Eigen::Vector3d RodConfig::shadeRodSegment(int rod, int segment) const
 {
-    double minZ = 100000.0;
-    double maxZ = -100000.0;
+    double minZ = std::numeric_limits<double>::infinity();
+    double maxZ = -std::numeric_limits<double>::infinity();
     for (int i = 0; i < numRods(); i++)
     {
         for (int j = 0; j < rods[i]->numSegments(); j++)
         {
             double curPos = rods[i]->startState.centerline(j, 2);
-            if ( minZ > curPos )
+            if (minZ > curPos)
             {
                 minZ = curPos;
             }
-            if ( maxZ <  curPos )
+            if (maxZ < curPos)
             {
                 maxZ = curPos;
             }
         }
     }
 
+    double zLevel = rods[rod]->startState.centerline(segment, 2);
+    double scale = (maxZ - zLevel) / (maxZ - minZ);
 
+    double tscale = (zLevel - minZ) / (maxZ - minZ);
+    double highlight = tscale * tscale * tscale * tscale * .5;
 
-    for (int i = 0; i < numRods(); i++)
+    Eigen::Vector3d c = rods[rod]->rodColor();
+    if (scale > .995)
     {
-        Eigen::MatrixXd col = Eigen::MatrixXd::Zero(rods[i]->numSegments(), 3);
-        for (int j = 0; j < rods[i]->numSegments(); j++)
-        {
-          double zLevel = rods[i]->startState.centerline(j , 2);
-          double scale = (maxZ - zLevel) / (maxZ - minZ);
-
-          double tscale = (zLevel - minZ) / (maxZ - minZ);
-          double highlight = tscale * tscale * tscale * tscale * .5;
-
-          double* c = face_colors[rods[i]->colorId];
-          if ( scale > .995 )
-          {
-            c = face_colors[num_colors];
-          }
-          else if ( scale < .008 )
-          {
-            c = face_colors[num_colors + 1];
-            scale = 1.;
-            tscale = 1.;
-          }
-          else 
-          {
-              scale = 1 - scale * scale * scale * scale * scale;
-          }
-
-          col(j, 0) = std::min(c[0] * scale + highlight, 1.);
-          col(j, 1) = std::min(c[1] * scale + highlight, 1.);
-          col(j, 2) = std::min(c[2] * scale + highlight, 1.);
-        }
-        rods[i]->colors = col;
+        for (int k = 0; k < 3; k++)
+            c[k] = top_color[k];
     }
+    else if (scale < .008)
+    {
+        for (int k = 0; k < 3; k++)
+            c[k] = bottom_color[k];
+        scale = 1.;
+        tscale = 1.;
+    }
+    else
+    {
+        scale = 1 - scale * scale * scale * scale * scale;
+    }
+    Eigen::Vector3d ret;
+    ret[0] = std::min(c[0] * scale + highlight, 1.);
+    ret[1] = std::min(c[1] * scale + highlight, 1.);
+    ret[2] = std::min(c[2] * scale + highlight, 1.);
 
+    return ret;
 }
 
 void RodConfig::saveRodGeometry(const std::string &prefix)
@@ -361,3 +355,4 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
         igl::writeOBJ(ss.str(), Q, F);
     }
 }
+

@@ -6,6 +6,22 @@
 
 #include "utility/simple_svg_1.0.0.hpp"
 
+const static double rod_colors[][3] = { 
+    { .001, .001, .95 },
+    { 0.95, 0.001, 0.001 },
+    { 0.95, 0.95, 0.001 },
+    { 0.01, 0.95, 0.01 },
+    { 0.95, 0.7, 0.01 },
+    { 0.5, 0.01, 0.5 },
+    { 0.001, 0.95, 0.95 }      
+};
+
+const static double top_color[3] = { .5, 0, 0 };
+const static double bottom_color[3] = { .7, .7, .2 };
+
+const static int num_rod_colors = sizeof(rod_colors)/(3*sizeof(double));
+
+
 struct RodParams
 {
     double thickness;
@@ -27,19 +43,21 @@ struct RodState
 class Rod
 {
 public:
-    Rod(const RodState &startState, const Eigen::VectorXd &widths, RodParams &params, bool isClosed);
+    Rod(const RodState &startState, const Eigen::VectorXd &widths, RodParams &params, bool isClosed, int colorID);
 
     bool isClosed() const { return isClosed_; }
+
+    void setVisible(bool state) { visible_ = state; }
+    bool isVisible() const { return visible_; }
+
+    Eigen::Vector3d rodColor() const;
+    int rodColorID() const { return colorID_; }
+    void cycleColor();
     int numVertices() const { return (int)curState.centerline.rows(); }
     int numSegments() const { return (int)curState.thetas.size(); }
     RodState curState;
     RodState startState;
-
-    int colorId;
-    double colorMod; 
-    Eigen::MatrixXd colors; 
-    bool visible; 
-
+    
     Eigen::VectorXd widths;
     Eigen::VectorXd restlens;
     Eigen::VectorXd masses;
@@ -48,8 +66,9 @@ public:
 
     void initializeRestQuantities();
 private:
+    int colorID_;
     bool isClosed_;
-
+    bool visible_; 
 };
 
 struct Constraint
@@ -60,7 +79,6 @@ struct Constraint
     double stiffness;
     int assignment;
     bool visited;
-    int color;
 };
 
 class RodConfig
@@ -75,13 +93,11 @@ public:
     int numConstraints() const { return (int)constraints.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
-    void setVisualizationMeshColors();
+    Eigen::Vector3d shadeRodSegment(int rod, int segment) const;
     void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;
     std::vector<Constraint> constraints;
-
-    int num_colors = 7; // make this less hacky...
 
     bool showConstraints;
 };

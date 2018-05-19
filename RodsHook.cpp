@@ -40,6 +40,10 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             linearSubdivision();
         }
+        if (ImGui::Button("Remove Disabled Rods", ImVec2(-1, 0)))
+        {
+            deleteInvisibleRods();
+        }
         if (ImGui::Button("Export Weave", ImVec2(-1, 0)))
         {
             exportWeave();
@@ -97,13 +101,11 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
             {
                 if ( button == 0 )
                 {
-                    config->rods[i]->visible = !config->rods[i]->visible;
+                    config->rods[i]->setVisible(!config->rods[i]->isVisible());
                 }
                 else 
                 {
-                    int num_cols = config->num_colors;
-                    config->rods[i]->colorId = ( config->rods[i]->colorId + 1 ) % num_cols; 
-                    config->setVisualizationMeshColors();
+                    config->rods[i]->cycleColor();
                 }
 
                 break;
@@ -621,29 +623,27 @@ void RodsHook::exportWeave()
     Eigen::MatrixXi angles = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0.);
     std::vector<Eigen::Matrix3d> rotations;
     rotations.push_back( Eigen::MatrixXd::Identity(3,3) );
-    int match_iter = 0;
     for (int i = 0; i < config->numConstraints(); i++)
     {
         Constraint c = config->constraints[i];
         collisions(c.rod1, c.seg1) = (1 + c.rod2) * c.assignment;
         collisions(c.rod2, c.seg2) = (1 + c.rod1) * c.assignment * -1;
-        collisions_strip_match(c.rod1, c.seg1) = config->rods[c.rod2]->colorId;//match_iter;
-        collisions_strip_match(c.rod2, c.seg2) = config->rods[c.rod1]->colorId;//match_iter;
-        collisions_circ_match(c.rod1, c.seg1) = match_iter;
-        collisions_circ_match(c.rod2, c.seg2) = match_iter;
-        config->constraints[i].color = match_iter;
+        collisions_strip_match(c.rod1, c.seg1) = config->rods[c.rod2]->rodColorID();//match_iter;
+        collisions_strip_match(c.rod2, c.seg2) = config->rods[c.rod1]->rodColorID();//match_iter;
+        collisions_circ_match(c.rod1, c.seg1) = i%colorlen;
+        collisions_circ_match(c.rod2, c.seg2) = i%colorlen;
         if (c.rod1 == c.rod2)
         {
             self_intersect(c.rod1, c.seg1) = 1;
             self_intersect(c.rod2, c.seg2) = 1;
         } 
 
-        if ( !config->rods[c.rod1]->visible || !config->rods[c.rod2]->visible )
+        if ( !config->rods[c.rod1]->isVisible() || !config->rods[c.rod2]->isVisible() )
         {
             self_intersect(c.rod1, c.seg1) = -1;
             self_intersect(c.rod2, c.seg2) = -1;
         }
-        match_iter = (match_iter + 3) % (colorlen * 3);
+        
         Eigen::Vector3d r1 = config->rods[c.rod1]->curState.centerline.row(c.seg1) - 
                              config->rods[c.rod1]->curState.centerline.row(c.seg1 + 1); 
         Eigen::Vector3d r2 = config->rods[c.rod2]->curState.centerline.row(c.seg2) - 
@@ -711,7 +711,8 @@ void RodsHook::exportWeave()
             Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
             endpoint = seg.norm() * strip_stretch + startpoint;
             pl_l << Point(endpoint, x_shift);
-            svg::Color c( r->colors(j, 0 ) * 255, r->colors(j, 1 ) * 255, r->colors(j, 2 ) * 255);
+            Eigen::Vector3d segcolor = config->shadeRodSegment(i, j);
+            svg::Color c( segcolor[0] * 255, segcolor[1] * 255, segcolor[2] * 255);
             doc << Line( Point(startpoint, x_shift + strip_width / 2.), Point(endpoint, x_shift + strip_width / 2.), Stroke(strip_width - 6., c) );
    //         pl_center << Point(endpoint, x_shift);
             startpoint = endpoint; 
@@ -757,7 +758,7 @@ void RodsHook::exportWeave()
                 svg::Polyline mark_crossing(Fill(Color::Transparent), Stroke(3., Color::Black));
 
                 int mark_cidx = collisions_strip_match(i,j);
-                if ( mark_cidx == config->rods[i]->colorId )
+                if ( mark_cidx == config->rods[i]->rodColorID() )
                     mark_cidx = colorlen;
                 if (collisions(i,j) < 0)
                 {
@@ -816,7 +817,7 @@ void RodsHook::exportWeave()
     std::ofstream ofs("my_svg_colors.txt");
     for (int i = 0; i < config->numRods(); i++) 
     {
-        ofs << config->rods[i]->colorId << " ";
+        ofs << config->rods[i]->rodColorID() << " ";
     }
 
 }
@@ -842,6 +843,45 @@ void RodsHook::showConstraints()
         constraintEdges(i, 0) = 2 * i;
         constraintEdges(i, 1) = 2 * i + 1;
     }
+}
+
+void RodsHook::deleteInvisibleRods()
+{
+    int nrods = config->numRods();
+    std::map<int, int> old2newid;
+    std::vector<Rod *> newrods;
+    int idx = 0;
+    for (int i = 0; i < nrods; i++)
+    {
+        if (config->rods[i]->isVisible())
+        {
+            newrods.push_back(config->rods[i]);
+            old2newid[i] = idx;
+            idx++;
+        }
+        else
+        {
+            delete config->rods[i];
+        }
+    }
+    config->rods = newrods;
+    std::vector<Constraint> newconstraints;
+    int nconstraints = config->numConstraints();
+    for (int i = 0; i < nconstraints; i++)
+    {
+        auto it = old2newid.find(config->constraints[i].rod1);
+        auto it2 = old2newid.find(config->constraints[i].rod2);
+        if (it != old2newid.end() && it2 != old2newid.end())
+        {
+            Constraint newc = config->constraints[i];
+            newc.rod1 = it->second;
+            newc.rod2 = it2->second;
+            newconstraints.push_back(newc);
+        }
+    }
+    config->constraints = newconstraints;
+    createVisualizationMesh();
+    updateRenderGeometry();
 }
 
 void RodsHook::linearSubdivision()
@@ -895,7 +935,6 @@ void RodsHook::linearSubdivision()
         newc.rod2 = c.rod2;
         newc.stiffness = c.stiffness;
         newc.assignment = c.assignment;
-        newc.color = 0;
         if(c.bary1 < 0.5)
         {
             newc.seg1 = 2*c.seg1;
@@ -936,4 +975,88 @@ void RodsHook::setWidths()
     }
     createVisualizationMesh();
     updateRenderGeometry();  
+}
+
+
+void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
+{
+    if (dirty)
+    {
+        viewer.data().clear();
+        dirty = false;
+    }
+    viewer.data().set_mesh(renderQ, renderF);
+
+    int faces = renderF.rows();
+    faceColors.resize(faces, 4);
+    faceColors.col(0).setConstant(0.7);
+    faceColors.col(1).setConstant(0.7);
+    faceColors.col(2).setConstant(0.7);
+    faceColors.col(3).setConstant(1.0);
+    int pos = 0;
+
+    double transp = 1.;
+
+    for (int i = 0; i < config->numRods(); i++)
+    {
+        if (config->rods[i]->isVisible())
+        {
+            transp = 1.;
+        }
+        else
+        {
+            transp = -10.0;
+        }
+
+        for (int j = 0; j < config->rods[i]->numSegments(); j++)
+        {
+            Eigen::Vector3d col = config->shadeRodSegment(i, j);
+            for ( int f = 0; f < 8; f++)
+            {
+                faceColors.row(pos) = Eigen::Vector4d(col(0), col(1), col(2), transp);
+                pos++;
+            }
+        }
+    }
+
+    int numConst = config->numConstraints();
+    int visibleConstraints = 0;
+    for (int i = 0; i < numConst; i++)
+    {
+        const Constraint &c = config->constraints[i];
+
+        if (config->rods[c.rod1]->isVisible() && config->rods[c.rod2]->isVisible())
+            visibleConstraints++;
+    }
+
+    Eigen::MatrixXd P = Eigen::MatrixXd::Zero(visibleConstraints, 3);
+    Eigen::MatrixXd C = Eigen::MatrixXd::Zero(visibleConstraints, 3);
+    
+    int idx = 0;
+    for (int i = 0; i < numConst; i++)
+    {
+        Constraint c = config->constraints[i];
+        const double* col = rod_colors[i%num_rod_colors];
+
+        if (config->rods[c.rod1]->isVisible() && config->rods[c.rod2]->isVisible())
+        {
+            P.row(idx) = constraintPoints.row(2 * i);
+            C.row(idx) = Eigen::Vector3d(col[0], col[1], col[2]);
+            idx++;
+        }
+    }
+    if (visualizeConstraints)
+    {
+        viewer.data().set_points(P, C);
+    }
+    else
+    {
+        viewer.data().set_points(Eigen::MatrixXd(0, 3), Eigen::MatrixXd(0, 3));
+    }
+
+    viewer.core.lighting_factor = 0.;
+    viewer.data().set_colors(faceColors);
+
+    if(constraintEdges.rows() > 0)
+        viewer.data().set_edges(constraintPoints, constraintEdges, constraintColors);
 }

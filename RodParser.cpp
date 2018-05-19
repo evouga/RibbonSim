@@ -94,7 +94,7 @@ RodConfig *readRod(const char *filename)
         }        
         if(nverts >= 2)
         {
-            Rod *r = new Rod(rs, widths, params, isclosed);
+            Rod *r = new Rod(rs, widths, params, isclosed, i%num_rod_colors);
             ret->addRod(r);
         }
         else
@@ -125,7 +125,6 @@ RodConfig *readRod(const char *filename)
         ifs >> c.stiffness;
         c.assignment = assignment;
         c.visited = false;
-        c.color = 0;
         assignment *= -1;
         ret->addConstraint(c);
     }
@@ -180,13 +179,6 @@ RodConfig *readRod(const char *filename)
             ret->rods[i]->startState.directors.row(j) *= orients[i];
             ret->rods[i]->curState.directors.row(j) *= orients[i];
         }
-    }
-
-    for(int i=0; i<nrods; i++)
-    {
-        int num_cols = ret->num_colors;
-        ret->rods[i]->colorId = (i % num_cols);
-        ret->rods[i]->colorMod = 0.;
     }
 
     if (!ifs)
