@@ -80,6 +80,7 @@ private:
     void loadTargetMesh();
     void findAnchorPoints(Eigen::MatrixXd &anchorPoints, Eigen::MatrixXd &anchorNormals);
     void testFiniteDifferences();
+    void saveConfig();
 
     std::string loadName;
 

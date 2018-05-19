@@ -7,6 +7,8 @@
  * Reads a weave definition from file. The file must contain three section: a header, list of rods, and list of constraints.
  *
  * The header consists of:
+ * -217      magic number that identified a .rod file in the new format
+ * (int)     version number
  * (int)     number of rods
  * (int)     number of constraints
  * (double)  rod thickness (in meters)
@@ -16,8 +18,11 @@
  * Each rod consists of:
  * (int)                   number of vertices NV
  * (0 or 1)                whether or not the rod is closed. If the rod is closed, the number of segments NS is equal to NV in the spec below. Otherwise, NS = NV-1.
+ * (0 or 1)                whether or not the rod is visible/enabled.
+ * (int)                   rod color
  * (list of 3*NV doubles)  centerline vertex positions
  * (list of 3*NS doubles)  orientation of the centerline segments (segment i connects vertex i and i+1). This vector specifies the "thickness" direction of the rod. It does not need to be normalized but must be perpendicular to its segment.
+ * (list of NS doubles)    twists theta of each segment
  * (list of NS double)     width of each rod segment (in meters)
  *
  * Each constraint consists of
@@ -30,5 +35,6 @@
  * (double)  stiffness (strength) of the constraint (N/m^2).
  */
 RodConfig *readRod(const char *filename);
+void writeRod(const char *filename, const RodConfig &config);
 
 #endif

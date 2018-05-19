@@ -13,8 +13,22 @@ RodConfig *readRod(const char *filename)
         return NULL;
     }
 
+    int magic;
+    int version;
     int nrods, nconstraints;
-    ifs >> nrods >> nconstraints;
+    ifs >> magic;
+    if (magic != -217)
+    {
+        // old format
+        nrods = magic;
+        version = 0;
+    }
+    else
+    {
+        ifs >> version;
+        ifs >> nrods;
+    }
+    ifs >> nconstraints;
     ifs >> params.thickness;
     double Y;
     ifs >> Y;
@@ -34,6 +48,18 @@ RodConfig *readRod(const char *filename)
         bool isclosed;
         ifs >> isclosed;
         int nsegs = isclosed ? nverts : nverts - 1;
+        bool visible;
+        int colorID;
+        if (version > 0)
+        {
+            ifs >> visible;            
+            ifs >> colorID;
+        }
+        else
+        {
+            visible = true;
+            colorID = i%num_rod_colors;
+        }        
         RodState rs;
         rs.centerline.resize(nverts, 3);
         for (int j = 0; j < nverts; j++)
@@ -83,7 +109,17 @@ RodConfig *readRod(const char *filename)
             }
         }
         rs.thetas.resize(nsegs);
-        rs.thetas.setZero();
+        if (version > 0)
+        {
+            for (int j = 0; j < nsegs; j++)
+            {
+                ifs >> rs.thetas[j];
+            }
+        }
+        else
+        {
+            rs.thetas.setZero();
+        }
         rs.directorAngVel.resize(nsegs);
         rs.directorAngVel.setZero();
 
@@ -94,7 +130,8 @@ RodConfig *readRod(const char *filename)
         }        
         if(nverts >= 2)
         {
-            Rod *r = new Rod(rs, widths, params, isclosed, i%num_rod_colors);
+            Rod *r = new Rod(rs, widths, params, isclosed, colorID);
+            r->setVisible(visible);
             ret->addRod(r);
         }
         else
@@ -184,4 +221,69 @@ RodConfig *readRod(const char *filename)
     if (!ifs)
         exit(-1);
     return ret;
+}
+
+void writeRod(const char *filename, const RodConfig &config)
+{
+    if (config.numRods() == 0)
+        return;
+    std::ofstream ofs(filename);
+    if (!ofs)
+        return;
+
+    ofs << -217 << std::endl;
+    ofs << 1 << std::endl;
+    ofs << config.numRods() << std::endl;
+    ofs << config.numConstraints() << std::endl;
+    ofs << config.rods[0]->params.thickness << std::endl;
+    ofs << config.rods[0]->params.kstretching << std::endl;
+    ofs << config.rods[0]->params.rho << std::endl;
+    ofs << std::endl;
+
+    for (int rod = 0; rod < config.numRods(); rod++)
+    {
+        ofs << config.rods[rod]->numVertices() << std::endl;
+        ofs << config.rods[rod]->isClosed() << std::endl;
+        ofs << config.rods[rod]->isVisible() << std::endl;
+        ofs << config.rods[rod]->rodColorID() << std::endl;
+        for (int i = 0; i < config.rods[rod]->numVertices(); i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                ofs << config.rods[rod]->curState.centerline(i, j) << " ";
+            }
+        }
+        ofs << std::endl;
+        for (int i = 0; i < config.rods[rod]->numSegments(); i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                ofs << config.rods[rod]->curState.directors(i, j) << " ";
+            }
+        }
+        ofs << std::endl;
+        for (int i = 0; i < config.rods[rod]->numSegments(); i++)
+        {
+            ofs << config.rods[rod]->curState.thetas[i] << " ";            
+        }
+        ofs << std::endl;
+        for (int i = 0; i < config.rods[rod]->numSegments(); i++)
+        {
+            ofs << config.rods[rod]->widths[i] << " ";
+        }
+        ofs << std::endl;
+    }
+    ofs << std::endl;
+
+    for (int c = 0; c < config.numConstraints(); c++)
+    {
+        ofs << config.constraints[c].rod1 << std::endl;
+        ofs << config.constraints[c].rod2 << std::endl;
+        ofs << config.constraints[c].seg1 << std::endl;
+        ofs << config.constraints[c].seg2 << std::endl;
+        ofs << config.constraints[c].bary1 << std::endl;
+        ofs << config.constraints[c].bary2 << std::endl;
+        ofs << config.constraints[c].stiffness << std::endl;
+        ofs << std::endl;
+    }
 }

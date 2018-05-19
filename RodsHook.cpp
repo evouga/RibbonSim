@@ -28,6 +28,10 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     if (ImGui::CollapsingHeader("Configuration", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::InputText("Config File", loadName);
+        if (ImGui::Button("Save Configuration", ImVec2(-1, 0)))
+        {
+            saveConfig();
+        }
     }
     if (ImGui::CollapsingHeader("Rod Controls", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -1059,4 +1063,10 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
     if(constraintEdges.rows() > 0)
         viewer.data().set_edges(constraintPoints, constraintEdges, constraintColors);
+}
+
+void RodsHook::saveConfig()
+{
+    if(config)
+        writeRod(loadName.c_str() , *config);
 }
