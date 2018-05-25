@@ -48,16 +48,18 @@ RodConfig *readRod(const char *filename)
         bool isclosed;
         ifs >> isclosed;
         int nsegs = isclosed ? nverts : nverts - 1;
-        bool visible;
+        Rod::RodVisibilityState visState;
         int colorID;
         if (version > 0)
         {
-            ifs >> visible;            
+            int visint;
+            ifs >> visint;            
             ifs >> colorID;
+            visState = (Rod::RodVisibilityState)visint;
         }
         else
         {
-            visible = true;
+            visState = Rod::RodVisibilityState::RS_VISIBLE;
             colorID = i%num_rod_colors;
         }        
         RodState rs;
@@ -131,7 +133,7 @@ RodConfig *readRod(const char *filename)
         if(nverts >= 2)
         {
             Rod *r = new Rod(rs, widths, params, isclosed, colorID);
-            r->setVisible(visible);
+            r->setVisibilityState(Rod::RodVisibilityState::RS_VISIBLE);
             ret->addRod(r);
         }
         else
@@ -244,7 +246,7 @@ void writeRod(const char *filename, const RodConfig &config)
     {
         ofs << config.rods[rod]->numVertices() << std::endl;
         ofs << config.rods[rod]->isClosed() << std::endl;
-        ofs << config.rods[rod]->isVisible() << std::endl;
+        ofs << (int)config.rods[rod]->visibilityState() << std::endl;
         ofs << config.rods[rod]->rodColorID() << std::endl;
         for (int i = 0; i < config.rods[rod]->numVertices(); i++)
         {

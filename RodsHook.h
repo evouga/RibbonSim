@@ -81,6 +81,7 @@ private:
     void findAnchorPoints(Eigen::MatrixXd &anchorPoints, Eigen::MatrixXd &anchorNormals);
     void testFiniteDifferences();
     void saveConfig();
+    void hideLongRods();
 
     std::string loadName;
 
@@ -90,6 +91,8 @@ private:
     bool allowSliding;
     float newWidth;
     float expLenScale;
+    bool limitRenderLen;
+    float maxRenderLen;
 
     RodConfig *config;
 

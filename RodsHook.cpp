@@ -16,6 +16,8 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1
     visualizeTargetMesh = true;
     allowSliding = false;
     stickToMesh = false;
+    maxRenderLen = 1.0;
+    limitRenderLen = false;
 
     Q.resize(0, 3);
     F.resize(0, 3);
@@ -25,6 +27,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 {
+    bool repaint = false;
     if (ImGui::CollapsingHeader("Configuration", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::InputText("Config File", loadName);
@@ -54,16 +57,19 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         }
         ImGui::InputFloat("Export Length Scale", &expLenScale);
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
-        bool oldVisuaizeTargetMesh = visualizeTargetMesh;
-        ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh);
-        if (oldVisuaizeTargetMesh != visualizeTargetMesh)
-            updateRenderGeometry();
-
+        
+        if (ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh))
+            repaint = true;
+        
         if (ImGui::Button("Set Widths", ImVec2(-1, 0)))
         {
             setWidths();
         }
-        ImGui::InputFloat("New Widths", &newWidth);
+        ImGui::InputFloat("New Widths", &newWidth);                
+        if (ImGui::Checkbox("Show Only Short Rods", &limitRenderLen))
+            repaint = true;
+        if (ImGui::InputFloat("Max Length", &maxRenderLen))
+            repaint = true;
     }
 
     if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
@@ -82,6 +88,12 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
     {
         ImGui::Text("Iteration %d", iter);
         ImGui::Text("Force Residual %f", forceResidual);
+    }
+    if (repaint)
+    {
+        hideLongRods();
+        createVisualizationMesh();
+        updateRenderGeometry();
     }
 }
 
@@ -105,7 +117,10 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
             {
                 if ( button == 0 )
                 {
-                    config->rods[i]->setVisible(!config->rods[i]->isVisible());
+                    if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_TRANSLUCENT)
+                        config->rods[i]->setVisibilityState(Rod::RodVisibilityState::RS_VISIBLE);
+                    else if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_VISIBLE)
+                        config->rods[i]->setVisibilityState(Rod::RodVisibilityState::RS_TRANSLUCENT);
                 }
                 else 
                 {
@@ -139,8 +154,25 @@ void RodsHook::initSimulation()
     dirty = true;
 }
 
+void RodsHook::hideLongRods()
+{
+    int nrods = config->numRods();
+    for (int i = 0; i < nrods; i++)
+    {
+        double len = config->rods[i]->arclength();
+        bool shouldbeshown = !limitRenderLen || len <= maxRenderLen;
+        if (shouldbeshown && config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_HIDDEN)
+            config->rods[i]->setVisibilityState(Rod::RodVisibilityState::RS_VISIBLE);
+        else if (!shouldbeshown)
+            config->rods[i]->setVisibilityState(Rod::RodVisibilityState::RS_HIDDEN);
+    }
+}
+
 void RodsHook::createVisualizationMesh()
 {
+    double maxlen = maxRenderLen;
+    if (!limitRenderLen)
+        maxlen = std::numeric_limits<double>::infinity();
     config->createVisualizationMesh(Q, F);
     exportWeave();
 }
@@ -642,7 +674,7 @@ void RodsHook::exportWeave()
             self_intersect(c.rod2, c.seg2) = 1;
         } 
 
-        if ( !config->rods[c.rod1]->isVisible() || !config->rods[c.rod2]->isVisible() )
+        if ( config->rods[c.rod1]->visibilityState() != Rod::RodVisibilityState::RS_VISIBLE || config->rods[c.rod2]->visibilityState() != Rod::RodVisibilityState::RS_VISIBLE )
         {
             self_intersect(c.rod1, c.seg1) = -1;
             self_intersect(c.rod2, c.seg2) = -1;
@@ -857,7 +889,7 @@ void RodsHook::deleteInvisibleRods()
     int idx = 0;
     for (int i = 0; i < nrods; i++)
     {
-        if (config->rods[i]->isVisible())
+        if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_VISIBLE)
         {
             newrods.push_back(config->rods[i]);
             old2newid[i] = idx;
@@ -1003,13 +1035,17 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
     for (int i = 0; i < config->numRods(); i++)
     {
-        if (config->rods[i]->isVisible())
+        if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_VISIBLE)
         {
             transp = 1.;
         }
-        else
+        else if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_TRANSLUCENT)
         {
             transp = -10.0;
+        }
+        else if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_HIDDEN)
+        {
+            continue;
         }
 
         for (int j = 0; j < config->rods[i]->numSegments(); j++)
@@ -1029,7 +1065,7 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
         const Constraint &c = config->constraints[i];
 
-        if (config->rods[c.rod1]->isVisible() && config->rods[c.rod2]->isVisible())
+        if (config->rods[c.rod1]->visibilityState() == Rod::RodVisibilityState::RS_VISIBLE && config->rods[c.rod2]->visibilityState()  == Rod::RodVisibilityState::RS_VISIBLE)
             visibleConstraints++;
     }
 
@@ -1042,7 +1078,7 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
         Constraint c = config->constraints[i];
         const double* col = rod_colors[i%num_rod_colors];
 
-        if (config->rods[c.rod1]->isVisible() && config->rods[c.rod2]->isVisible())
+        if (config->rods[c.rod1]->visibilityState() == Rod::RodVisibilityState::RS_VISIBLE && config->rods[c.rod2]->visibilityState()  == Rod::RodVisibilityState::RS_VISIBLE)
         {
             P.row(idx) = constraintPoints.row(2 * i);
             C.row(idx) = Eigen::Vector3d(col[0], col[1], col[2]);

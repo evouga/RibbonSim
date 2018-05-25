@@ -4,7 +4,7 @@
 #include <igl/writeOBJ.h>
 #include <Eigen/Geometry>
 
-Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed, int colorID) : startState(startState), params(params), isClosed_(isClosed), visible_(true), colorID_(colorID)
+Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams &params, bool isClosed, int colorID) : startState(startState), params(params), isClosed_(isClosed), visState_(RodVisibilityState::RS_VISIBLE), colorID_(colorID)
 {
     int nverts = startState.centerline.rows();
     int nsegs = isClosed ? nverts : nverts - 1;
@@ -70,6 +70,18 @@ Eigen::Vector3d Rod::rodColor() const
 void Rod::cycleColor()
 {
     colorID_ = (colorID_ + 1) % num_rod_colors;
+}
+
+double Rod::arclength() const
+{
+    int nsegs = numSegments();
+    int nverts = numVertices();
+    double total = 0.0;
+    for (int i = 0; i < nsegs; i++)
+    {
+        total += (curState.centerline.row(i) - curState.centerline.row((i + 1) % nverts)).norm();
+    }
+    return total;
 }
 
 RodConfig::~RodConfig()
@@ -161,7 +173,7 @@ void RodConfig::reset()
     for (int i = 0; i < nrods; i++)
     {
         rods[i]->curState = rods[i]->startState;
-        rods[i]->setVisible(true);
+        rods[i]->setVisibilityState(Rod::RodVisibilityState::RS_VISIBLE);
     }
 }
 
@@ -171,6 +183,8 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
     int totalsegs = 0;
     for (int i = 0; i < nrods; i++)
     {
+        if (rods[i]->visibilityState() == Rod::RodVisibilityState::RS_HIDDEN)
+            continue;
         totalsegs += rods[i]->numSegments();
     }
     Q.resize(8 * totalsegs, 3);
@@ -180,6 +194,8 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
 
     for (int rod = 0; rod < nrods; rod++)
     {
+        if (rods[rod]->visibilityState() == Rod::RodVisibilityState::RS_HIDDEN)
+            continue;
         int nverts = rods[rod]->numVertices();
         int nsegs = rods[rod]->numSegments();
         Eigen::MatrixXd N(nsegs, 3);

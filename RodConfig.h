@@ -45,16 +45,24 @@ class Rod
 public:
     Rod(const RodState &startState, const Eigen::VectorXd &widths, RodParams &params, bool isClosed, int colorID);
 
+    enum RodVisibilityState
+    {
+        RS_TRANSLUCENT=0,
+        RS_VISIBLE,
+        RS_HIDDEN
+    };
+
     bool isClosed() const { return isClosed_; }
 
-    void setVisible(bool state) { visible_ = state; }
-    bool isVisible() const { return visible_; }
+    void setVisibilityState(RodVisibilityState state) { visState_ = state; }
+    RodVisibilityState visibilityState() const { return visState_; }
 
     Eigen::Vector3d rodColor() const;
     int rodColorID() const { return colorID_; }
     void cycleColor();
     int numVertices() const { return (int)curState.centerline.rows(); }
     int numSegments() const { return (int)curState.thetas.size(); }
+    double arclength() const;
     RodState curState;
     RodState startState;
     
@@ -64,11 +72,12 @@ public:
     Eigen::VectorXd momInertia;
     RodParams params;
 
+
     void initializeRestQuantities();
 private:
     int colorID_;
     bool isClosed_;
-    bool visible_; 
+    RodVisibilityState visState_;
 };
 
 struct Constraint
