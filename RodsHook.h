@@ -74,6 +74,7 @@ private:
     void showConstraints();
     void deleteInvisibleRods();
     void linearSubdivision();
+    void exportSomeRods(const char*filename, int firstRod, int numRods);
     void exportWeave();    
     void centerScene();
     void slideConstraints();
@@ -100,6 +101,7 @@ private:
     bool visualizeConstraints;
     bool visualizeTargetMesh;
 
+    int rodsPerSVG;
     std::string targetMeshName;
     bool stickToMesh;
 

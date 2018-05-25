@@ -18,7 +18,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1
     stickToMesh = false;
     maxRenderLen = 1.0;
     limitRenderLen = false;
-
+    rodsPerSVG = 10;
     Q.resize(0, 3);
     F.resize(0, 3);
     renderQ.resize(0, 3);
@@ -51,6 +51,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             deleteInvisibleRods();
         }
+        ImGui::InputInt("Rods Per SVG", &rodsPerSVG);
         if (ImGui::Button("Export Weave", ImVec2(-1, 0)))
         {
             exportWeave();
@@ -173,8 +174,7 @@ void RodsHook::createVisualizationMesh()
     double maxlen = maxRenderLen;
     if (!limitRenderLen)
         maxlen = std::numeric_limits<double>::infinity();
-    config->createVisualizationMesh(Q, F);
-    exportWeave();
+    config->createVisualizationMesh(Q, F);    
 }
 
 void RodsHook::loadTargetMesh()
@@ -622,6 +622,22 @@ void RodsHook::saveRods()
 using namespace svg;
 void RodsHook::exportWeave()
 {
+    int part = 0;
+    int nrods = config->numRods();
+    int start = 0;
+    while (start < nrods)
+    {
+        std::stringstream ss;
+        ss << "my_svg_" << part << ".svg";
+        int rodsToExport = std::min(rodsPerSVG, nrods - start);
+        exportSomeRods(ss.str().c_str(), start, rodsToExport);
+        part++;
+        start += rodsToExport;
+    }
+}
+
+void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
+{
     double strip_width = 45.;
     double strip_space = 10.;
     double strip_stretch = 600. * expLenScale;
@@ -634,7 +650,7 @@ void RodsHook::exportWeave()
     char clist_char[] = {'b', 'r', 'y', 'g', 'o', 'p', 'c', 'B'};
     int colorlen = 7;
 
-    double maxlen = 0;
+    int maxlen = 0;
     double maxseg = 0;
     for (int i = 0; i < config->numRods(); i++) 
     {  
@@ -649,8 +665,8 @@ void RodsHook::exportWeave()
         }
     } 
 
-    Dimensions dimensions(strip_stretch * maxlen * maxseg, (config->numRods() + 1) * (strip_width + strip_space));
-    Document doc("my_svg.svg", Layout(dimensions, Layout::BottomLeft));
+    Dimensions dimensions(strip_stretch * maxlen * maxseg, (numRods + 1) * (strip_width + strip_space));
+    Document doc(filename, Layout(dimensions, Layout::BottomLeft));
 
     Eigen::MatrixXi collisions = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
     Eigen::MatrixXi collisions_strip_match = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
@@ -731,7 +747,7 @@ void RodsHook::exportWeave()
 
 
     // Draw lines
-    for (int i = 0; i < config->numRods(); i++) 
+    for (int i = firstRod; i < firstRod+numRods; i++) 
     {
         Rod *r = config->rods[i];
     //    Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
@@ -739,7 +755,7 @@ void RodsHook::exportWeave()
         svg::Polyline pl_r(Stroke(.5, Color::Black));
         double startpoint = 0.;
         double endpoint;
-        double x_shift = i * (strip_width + strip_space);
+        double x_shift = (i-firstRod) * (strip_width + strip_space);
         pl_l << Point(startpoint, x_shift);
   //      pl_center << Point(startpoint, x_shift);
         for (int j = 0; j < r->numSegments(); j++)
@@ -761,12 +777,12 @@ void RodsHook::exportWeave()
     }
 
     // Draw crossings and labels 
-    for (int i = 0; i < config->numRods(); i++) 
+    for (int i = firstRod; i < firstRod+numRods; i++) 
     {
         Rod *r = config->rods[i];
         double startpoint = 0.;
         double endpoint;
-        double x_shift = i * (strip_width + strip_space) + strip_space;
+        double x_shift = (i-firstRod) * (strip_width + strip_space) + strip_space;
         double lasttext = -200.;
 
         for (int j = 0; j < r->numSegments() - 1; j++)
@@ -777,7 +793,7 @@ void RodsHook::exportWeave()
             startpoint = endpoint;
             if ( collisions(i,j) != 0) 
             { 
-                double y_center = i * (strip_width + strip_space) + .5 * strip_width;
+                double y_center = (i-firstRod) * (strip_width + strip_space) + .5 * strip_width;
                 if ( self_intersect(i,j) == -1 ) {}
                 else if ( self_intersect(i,j) > 0 )
                 {
@@ -849,12 +865,12 @@ void RodsHook::exportWeave()
     } 
     
     doc.save();
-
+    /*
     std::ofstream ofs("my_svg_colors.txt");
     for (int i = 0; i < config->numRods(); i++) 
     {
         ofs << config->rods[i]->rodColorID() << " ";
-    }
+    }*/
 
 }
 
