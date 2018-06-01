@@ -113,7 +113,7 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
         int nextId = 0;
         for (int i = 0; i < config->numRods(); i++)
         {
-            nextId += config->rods[i]->numVertices() * 8;
+            nextId += config->rods[i]->numSegments() * 8;
             if (fid < nextId && fid > prevId)
             {
                 if ( button == 0 )
