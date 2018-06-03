@@ -17,10 +17,10 @@ Eigen::Vector3d perpToVector(const Eigen::Vector3d &v)
     double minval = std::numeric_limits<double>::infinity();
     for (int i = 0; i < 3; i++)
     {
-        if (v[i] < minval)
+        if (fabs(v[i]) < minval)
         {
             mincoord = i;
-            minval = v[i];
+            minval = fabs(v[i]);
         }
     }
     Eigen::Vector3d axis(0, 0, 0);
@@ -487,7 +487,7 @@ void rAndJ(RodConfig &config,
             for (int i = 0; i < nverts; i++)
             {
                 Eigen::Vector3d disp = rod->curState.centerline.row(i).transpose() - anchorPoints->row(idx/3).transpose();
-                Eigen::Vector3d n = anchorNormals->row(idx/3);
+                Eigen::Vector3d n = anchorNormals->row(idx/3);                
                 Eigen::Vector3d t1 = perpToVector(n);
                 Eigen::Vector3d t2 = n.cross(t1);
                 r[roffset + idx] = normalStiffness * disp.dot(n);
