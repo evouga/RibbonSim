@@ -30,6 +30,78 @@ Eigen::Vector3d perpToVector(const Eigen::Vector3d &v)
     return result;
 }
 
+void contactEnergyTerms(RodConfig &config, double constraintWeight, bool allowSliding, int constraint,
+    Eigen::Vector3d &gap1,
+    Eigen::Matrix<double, 3, 16> &J1, //rod1 pos, rod2 pos, rod1 theta, rod2 theta, barys
+    Eigen::Vector3d &gap2,
+    Eigen::Matrix<double, 3, 16> &J2 
+    )
+{
+    const Constraint &c = config.constraints[constraint];
+    const RodState &rs1 = config.rods[c.rod1]->curState;
+    const RodState &rs2 = config.rods[c.rod2]->curState;
+
+    int nverts1 = config.rods[c.rod1]->numVertices();
+    Eigen::Vector3d p1 = config.rods[c.rod1]->curState.centerline.row(c.seg1);
+    Eigen::Vector3d p2 = config.rods[c.rod1]->curState.centerline.row((c.seg1 + 1) % nverts1);
+    int nverts2 = config.rods[c.rod2]->numVertices();
+    Eigen::Vector3d q1 = config.rods[c.rod2]->curState.centerline.row(c.seg2);
+    Eigen::Vector3d q2 = config.rods[c.rod2]->curState.centerline.row((c.seg2 + 1) % nverts2);
+    Eigen::Vector3d t01 = (p2 - p1) / (p2 - p1).norm();
+    Eigen::Vector3d t12 = (q2 - q1) / (q2 - q1).norm();
+
+    Eigen::Vector3d db11 = rs1.directors.row(c.seg1);
+    Eigen::Vector3d db21 = t01.cross(db11);
+    Eigen::Vector3d db12 = rs2.directors.row(c.seg2);
+    Eigen::Vector3d db22 = t12.cross(db12);
+    double theta1 = config.rods[c.rod1]->curState.thetas[c.seg1];
+    double theta2 = config.rods[c.rod2]->curState.thetas[c.seg2];
+    Eigen::Vector3d d1 = db11*cos(theta1) + db21*sin(theta1);
+    Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
+
+    Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
+    Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
+    double factor = sqrt(0.5 * constraintWeight * c.stiffness);
+    
+    gap1 = factor * (pt1 + c.assignment * d1 * config.rods[c.rod1]->params.thickness - pt2);
+    gap2 = factor * (pt1 + c.assignment * d2 * config.rods[c.rod2]->params.thickness - pt2);
+
+    J1.setZero();
+    J2.setZero();
+
+    for(int j=0; j<3; j++)
+    {
+        J1(j,j) += factor * (1.0 - c.bary1);                
+        J1(j,3+j) += factor * c.bary1;
+        J2(j,j) += factor * (1.0 - c.bary1);                
+        J2(j,3+j) += factor * c.bary1;
+    
+        J1(j,6+j) += -factor * (1.0 - c.bary2);
+        J1(j,9+j) += -factor * c.bary2;
+        J2(j,6+j) += -factor * (1.0 - c.bary2);
+        J2(j,9+j) += -factor * c.bary2;
+    }
+            
+    J1.block<3,3>(0,0) += factor * config.rods[c.rod1]->params.thickness * c.assignment * t01*d1.transpose()/ (p2 - p1).norm();
+    J1.block<3,3>(0,3) += -factor * config.rods[c.rod1]->params.thickness * c.assignment * t01*d1.transpose()/ (p2 - p1).norm();  
+    J2.block<3,3>(0,6) += factor * config.rods[c.rod2]->params.thickness * c.assignment * t12*d2.transpose()/ (q2 - q1).norm();
+    J2.block<3,3>(0,9) += -factor * config.rods[c.rod2]->params.thickness * c.assignment * t12*d2.transpose()/ (q2 - q1).norm();  
+            
+    Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
+    Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
+    J1.col(12) += c.assignment * factor * config.rods[c.rod1]->params.thickness * Dd1;
+    J2.col(13) += c.assignment * factor * config.rods[c.rod2]->params.thickness * Dd2;
+    if (allowSliding)
+    {
+        J1.col(14) += factor * (p2 - p1);
+        J1.col(15) += -factor * (q2 - q1);
+        
+        J2.col(14) += factor * (p2 - p1);
+        J2.col(15) += -factor * (q2 - q1);
+    }
+
+}
+
 void rAndJ(RodConfig &config, 
     Eigen::VectorXd &r, 
     Eigen::SparseMatrix<double> *Jr, 
@@ -219,34 +291,19 @@ void rAndJ(RodConfig &config,
     // constraint energy rod1 -> rod2
     for (int i = 0; i < nconstraints; i++)
     {
+        Eigen::Vector3d gap1, gap2;
+        Eigen::Matrix<double, 3, 16> J1, J2;
+        contactEnergyTerms(config, constraintWeight, allowSliding, i, gap1, J1, gap2, J2);
+
         const Constraint &c = config.constraints[i];
-        const RodState &rs1 = config.rods[c.rod1]->curState;
-        const RodState &rs2 = config.rods[c.rod2]->curState;
 
         int nverts1 = config.rods[c.rod1]->numVertices();
-        Eigen::Vector3d p1 = config.rods[c.rod1]->curState.centerline.row(c.seg1);
-        Eigen::Vector3d p2 = config.rods[c.rod1]->curState.centerline.row((c.seg1 + 1) % nverts1);
         int nverts2 = config.rods[c.rod2]->numVertices();
-        Eigen::Vector3d q1 = config.rods[c.rod2]->curState.centerline.row(c.seg2);
-        Eigen::Vector3d q2 = config.rods[c.rod2]->curState.centerline.row((c.seg2 + 1) % nverts2);
-        Eigen::Vector3d t01 = (p2 - p1) / (p2 - p1).norm();
-        Eigen::Vector3d t12 = (q2 - q1) / (q2 - q1).norm();
 
-        Eigen::Vector3d db11 = rs1.directors.row(c.seg1);
-        Eigen::Vector3d db21 = t01.cross(db11);
-        Eigen::Vector3d db12 = rs2.directors.row(c.seg2);
-        Eigen::Vector3d db22 = t12.cross(db12);
-        double theta1 = config.rods[c.rod1]->curState.thetas[c.seg1];
-        double theta2 = config.rods[c.rod2]->curState.thetas[c.seg2];
-        Eigen::Vector3d d1 = db11*cos(theta1) + db21*sin(theta1);
-        Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
-
-        Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
-        Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
-        double factor = sqrt(0.5 * constraintWeight * c.stiffness);
         for (int j = 0; j < 3; j++)
         {
-            r[roffset + 3 * i + j] = factor * (pt1 + c.assignment * d1 * config.rods[c.rod1]->params.thickness - pt2)[j];
+            r[roffset + 6 * i + j] = gap1[j];
+            r[roffset + 6 * i + j + 3] = gap2[j];
         }
 
         if (Jr)
@@ -263,99 +320,33 @@ void rAndJ(RodConfig &config,
             }
             for (int j = 0; j < 3; j++)
             {
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, factor * (1.0 - c.bary1)));                
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, factor * c.bary1));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -factor * (1.0 - c.bary2)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -factor * c.bary2));
                 for (int k = 0; k < 3; k++)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + k, factor * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + k, -factor * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));                    
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod1offset + 3 * c.seg1 + k, J1(j,k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + k, J1(j,3+k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod2offset + 3 * c.seg2 + k, J1(j,6+k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + k, J1(j,9+k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod1offset + 3 * c.seg1 + k, J2(j,k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + k, J2(j,3+k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod2offset + 3 * c.seg2 + k, J2(j,6+k)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + k, J2(j,9+k)));
                 }
-                Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
-                Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, c.assignment * factor * config.rods[c.rod1]->params.thickness * Dd1[j]));
+                J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, J1(j, 12)));
+                J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, J1(j, 13)));
+                J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, J2(j, 12)));
+                J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, J2(j, 13)));
                 if (allowSliding)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, factor * (p2 - p1)[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -factor * (q2 - q1)[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, baryoffset + 2 * i, J1(j, 14)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, baryoffset + 2 * i + 1, J1(j, 15)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, baryoffset + 2 * i, J2(j, 14)));
+                    J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, baryoffset + 2 * i + 1, J2(j, 15)));
                 }
             }
         }
     }
-    roffset += 3 * nconstraints;
+    roffset += 6 * nconstraints;
 
-    // constraint energy rod2 -> rod1
-    for (int i = 0; i < nconstraints; i++)
-    {
-        const Constraint &c = config.constraints[i];
-        const RodState &rs1 = config.rods[c.rod1]->curState;
-        const RodState &rs2 = config.rods[c.rod2]->curState;
-
-        int nverts1 = config.rods[c.rod1]->numVertices();
-        Eigen::Vector3d p1 = config.rods[c.rod1]->curState.centerline.row(c.seg1);
-        Eigen::Vector3d p2 = config.rods[c.rod1]->curState.centerline.row((c.seg1 + 1) % nverts1);
-        int nverts2 = config.rods[c.rod2]->numVertices();
-        Eigen::Vector3d q1 = config.rods[c.rod2]->curState.centerline.row(c.seg2);
-        Eigen::Vector3d q2 = config.rods[c.rod2]->curState.centerline.row((c.seg2 + 1) % nverts2);
-        Eigen::Vector3d t01 = (p2 - p1) / (p2 - p1).norm();
-        Eigen::Vector3d t12 = (q2 - q1) / (q2 - q1).norm();
-
-        Eigen::Vector3d db11 = rs1.directors.row(c.seg1);
-        Eigen::Vector3d db21 = t01.cross(db11);
-        Eigen::Vector3d db12 = rs2.directors.row(c.seg2);
-        Eigen::Vector3d db22 = t12.cross(db12);
-        double theta1 = config.rods[c.rod1]->curState.thetas[c.seg1];
-        double theta2 = config.rods[c.rod2]->curState.thetas[c.seg2];
-        Eigen::Vector3d d1 = db11*cos(theta1) + db21*sin(theta1);
-        Eigen::Vector3d d2 = db12*cos(theta2) + db22*sin(theta2);
-
-        Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
-        Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
-        double factor = sqrt(0.5 * constraintWeight * c.stiffness);
-        for (int j = 0; j < 3; j++)
-        {
-            r[roffset + 3 * i + j] = factor * (pt1 + c.assignment * d2 * config.rods[c.rod2]->params.thickness - pt2)[j];
-        }
-            
-
-        if (Jr)
-        {
-            int rod1offset = 0;
-            int rod2offset = 0;
-            for (int rod = 0; rod < c.rod1; rod++)
-            {
-                rod1offset += 3 * config.rods[rod]->numVertices() + config.rods[rod]->numSegments();
-            }
-            for (int rod = 0; rod < c.rod2; rod++)
-            {
-                rod2offset += 3 * config.rods[rod]->numVertices() + config.rods[rod]->numSegments();
-            }
-            for (int j = 0; j < 3; j++)
-            {
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, factor * (1.0 - c.bary1)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, factor * c.bary1));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -factor * (1.0 - c.bary2)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -factor * c.bary2));
-                for (int k = 0; k < 3; k++)
-                {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + k, factor * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + k, -factor * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));                    
-                }
-
-                Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
-                Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, c.assignment * factor * config.rods[c.rod2]->params.thickness * Dd2[j]));
-
-                if (allowSliding)
-                {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, factor * (p2 - p1)[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -factor * (q2 - q1)[j]));
-                }
-            }
-        }
-    }
-    roffset += 3 * nconstraints;
 /*
     for (int i = 0; i < nconstraints; i++)
     {
