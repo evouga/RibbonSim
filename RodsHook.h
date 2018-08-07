@@ -88,7 +88,7 @@ private:
 
     int iter;
     double forceResidual;
-    float angleWeight;
+    float constraintWeight;
     bool allowSliding;
     float newWidth;
     float expLenScale;

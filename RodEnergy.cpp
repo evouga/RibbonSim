@@ -33,7 +33,7 @@ Eigen::Vector3d perpToVector(const Eigen::Vector3d &v)
 void rAndJ(RodConfig &config, 
     Eigen::VectorXd &r, 
     Eigen::SparseMatrix<double> *Jr, 
-    double angleWeight, 
+    double constraintWeight, 
     bool allowSliding, 
     Eigen::MatrixXd *anchorPoints, 
     Eigen::MatrixXd *anchorNormals)
@@ -55,7 +55,7 @@ void rAndJ(RodConfig &config,
     ndofs += 2 * config.numConstraints();
 
     nterms += 6 * config.constraints.size(); // constraint positions
-    nterms += config.constraints.size(); // constraint directions
+    //nterms += config.constraints.size(); // constraint directions
     nterms += 4 * config.constraints.size(); // barycentric coord inequality constraints
 
     r.resize(nterms);
@@ -215,6 +215,7 @@ void rAndJ(RodConfig &config,
     }
 
     int nconstraints = (int)config.constraints.size();
+
     // constraint energy rod1 -> rod2
     for (int i = 0; i < nconstraints; i++)
     {
@@ -242,9 +243,10 @@ void rAndJ(RodConfig &config,
 
         Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
         Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
+        double factor = sqrt(0.5 * constraintWeight * c.stiffness);
         for (int j = 0; j < 3; j++)
         {
-            r[roffset + 3 * i + j] = sqrt(0.5 * c.stiffness) * (pt1 + c.assignment * d1 * config.rods[c.rod1]->params.thickness - pt2)[j];
+            r[roffset + 3 * i + j] = factor * (pt1 + c.assignment * d1 * config.rods[c.rod1]->params.thickness - pt2)[j];
         }
 
         if (Jr)
@@ -261,22 +263,22 @@ void rAndJ(RodConfig &config,
             }
             for (int j = 0; j < 3; j++)
             {
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, sqrt(0.5*c.stiffness) * (1.0 - c.bary1)));                
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, sqrt(0.5*c.stiffness) * c.bary1));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -sqrt(0.5*c.stiffness) * (1.0 - c.bary2)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -sqrt(0.5*c.stiffness) * c.bary2));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, factor * (1.0 - c.bary1)));                
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, factor * c.bary1));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -factor * (1.0 - c.bary2)));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -factor * c.bary2));
                 for (int k = 0; k < 3; k++)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + k, sqrt(0.5*c.stiffness) * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + k, -sqrt(0.5*c.stiffness) * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));                    
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + k, factor * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + k, -factor * config.rods[c.rod1]->params.thickness * c.assignment * t01[j]*d1[k]/ (p2 - p1).norm()));                    
                 }
                 Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
                 Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, c.assignment * sqrt(0.5*c.stiffness) * config.rods[c.rod1]->params.thickness * Dd1[j]));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, c.assignment * factor * config.rods[c.rod1]->params.thickness * Dd1[j]));
                 if (allowSliding)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, sqrt(0.5*c.stiffness) * (p2 - p1)[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -sqrt(0.5*c.stiffness) * (q2 - q1)[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, factor * (p2 - p1)[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -factor * (q2 - q1)[j]));
                 }
             }
         }
@@ -310,9 +312,10 @@ void rAndJ(RodConfig &config,
 
         Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
         Eigen::Vector3d pt2 = (1.0 - c.bary2)*q1 + c.bary2*q2;
+        double factor = sqrt(0.5 * constraintWeight * c.stiffness);
         for (int j = 0; j < 3; j++)
         {
-            r[roffset + 3 * i + j] = sqrt(0.5 * c.stiffness) * (pt1 + c.assignment * d2 * config.rods[c.rod2]->params.thickness - pt2)[j];
+            r[roffset + 3 * i + j] = factor * (pt1 + c.assignment * d2 * config.rods[c.rod2]->params.thickness - pt2)[j];
         }
             
 
@@ -330,30 +333,30 @@ void rAndJ(RodConfig &config,
             }
             for (int j = 0; j < 3; j++)
             {
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, sqrt(0.5*c.stiffness) * (1.0 - c.bary1)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, sqrt(0.5*c.stiffness) * c.bary1));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -sqrt(0.5*c.stiffness) * (1.0 - c.bary2)));
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -sqrt(0.5*c.stiffness) * c.bary2));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * c.seg1 + j, factor * (1.0 - c.bary1)));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod1offset + 3 * ((c.seg1 + 1) % nverts1) + j, factor * c.bary1));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + j, -factor * (1.0 - c.bary2)));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + j, -factor * c.bary2));
                 for (int k = 0; k < 3; k++)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + k, sqrt(0.5*c.stiffness) * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + k, -sqrt(0.5*c.stiffness) * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));                    
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * c.seg2 + k, factor * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * ((c.seg2 + 1) % nverts2) + k, -factor * config.rods[c.rod2]->params.thickness * c.assignment * t12[j]*d2[k]/ (q2 - q1).norm()));                    
                 }
 
                 Eigen::Vector3d Dd1 = -db11*sin(theta1) + db21*cos(theta1);
                 Eigen::Vector3d Dd2 = -db12*sin(theta2) + db22*cos(theta2);
-                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, c.assignment * sqrt(0.5*c.stiffness) * config.rods[c.rod2]->params.thickness * Dd2[j]));
+                J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, c.assignment * factor * config.rods[c.rod2]->params.thickness * Dd2[j]));
 
                 if (allowSliding)
                 {
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, sqrt(0.5*c.stiffness) * (p2 - p1)[j]));
-                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -sqrt(0.5*c.stiffness) * (q2 - q1)[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i, factor * (p2 - p1)[j]));
+                    J.push_back(Eigen::Triplet<double>(roffset + 3 * i + j, baryoffset + 2 * i + 1, -factor * (q2 - q1)[j]));
                 }
             }
         }
     }
     roffset += 3 * nconstraints;
-
+/*
     for (int i = 0; i < nconstraints; i++)
     {
         const Constraint &c = config.constraints[i];
@@ -385,7 +388,7 @@ void rAndJ(RodConfig &config,
         }
         axis /= axis.norm();
         double theta = angle(d1, d2, axis);
-        double factor = angleWeight * 0.5 * c.stiffness;
+        double factor = 0*angleWeight * 0.5 * c.stiffness;
         r[roffset + i] = sqrt(factor)*theta;
         if (Jr)
         {
@@ -417,11 +420,10 @@ void rAndJ(RodConfig &config,
 
             J.push_back(Eigen::Triplet<double>(roffset + i, rod1thetaoffset + c.seg1, sqrt(factor)*dtheta1.dot(d1dtheta)));
             J.push_back(Eigen::Triplet<double>(roffset + i, rod2thetaoffset + c.seg2, sqrt(factor)*dtheta2.dot(d2dtheta)));
-        }
-
+        }        
     }
 
-    roffset += nconstraints;
+    roffset += nconstraints;*/
     double penstiffness = 1e4;
     for (int i = 0; i < nconstraints; i++)
     {

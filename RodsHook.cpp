@@ -6,7 +6,7 @@
 #include <Eigen/Dense>
 #include <igl/point_mesh_squared_distance.h>
 
-RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), angleWeight(1e3), newWidth(0.01), 
+RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWeight(1e3), newWidth(0.01), 
                                       dirty(true), config(NULL), expLenScale(1.0) 
 {
     savePrefix = "rod_";
@@ -75,7 +75,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 
     if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::InputFloat("Orientation Weight", &angleWeight);
+        ImGui::InputFloat("Constraint Weight", &constraintWeight);
         ImGui::Checkbox("Allow Sliding", &allowSliding);
         ImGui::InputText("Target Mesh", targetMeshName);
         if (ImGui::Button("Load Mesh", ImVec2(-1, 0)))
@@ -214,7 +214,7 @@ void RodsHook::loadTargetMesh()
 
 double lineSearch(RodConfig &config, 
     const Eigen::VectorXd &update, 
-    double angleWeight, 
+    double constraintWeight, 
     bool allowSliding,
     Eigen::MatrixXd *anchorPoints,
     Eigen::MatrixXd *anchorNormals)
@@ -228,7 +228,7 @@ double lineSearch(RodConfig &config,
 
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> J;
-    rAndJ(config, r, &J, angleWeight, allowSliding, anchorPoints, anchorNormals);  
+    rAndJ(config, r, &J, constraintWeight, allowSliding, anchorPoints, anchorNormals);  
 
     Eigen::VectorXd dE;
     Eigen::VectorXd newdE;
@@ -278,7 +278,7 @@ double lineSearch(RodConfig &config,
             config.constraints[i].bary2 = startC[i].bary2 - t * update[dofoffset + 2 * i + 1];            
         }
 
-        rAndJ(config, r, &J, angleWeight, allowSliding, anchorPoints, anchorNormals);
+        rAndJ(config, r, &J, constraintWeight, allowSliding, anchorPoints, anchorNormals);
 
         double newenergy = 0.5 * r.transpose() * r;
         newdE = J.transpose() * r;
@@ -485,7 +485,7 @@ void RodsHook::testFiniteDifferences()
     rAndJ(*config,
         r,
         &Jr,
-        angleWeight,
+        constraintWeight,
         allowSliding,
         NULL,
         NULL);
@@ -499,7 +499,7 @@ void RodsHook::testFiniteDifferences()
     int idx2 = 0;
     for (int i = 0; i < config->numRods(); i++)
     {
-        idx2 += 3*config->rods[i]->numVertices();
+        idx2 += 3*config->rods[i]->numVertices();            
         idx2 += config->rods[i]->numSegments();
     }
     for (int i = 0; i < config->numConstraints(); i++)
@@ -550,15 +550,16 @@ void RodsHook::testFiniteDifferences()
     rAndJ(*config,
         newr,
         NULL,
-        angleWeight,
+        constraintWeight,
         allowSliding,
         NULL,
         NULL);
     std::ofstream ofs("findiff.txt");
-    ofs << "exact:" << std::endl;
-    ofs << exact << std::endl << std::endl;
-    ofs << "findiff: " << std::endl;
-    ofs << (newr - r) / eps << std::endl;
+    ofs << "exact / findiff:" << std::endl;
+    for(int i=0; i<exact.size(); i++)
+    {
+        ofs << exact[i] << "\t/\t" << (newr[i] - r[i]) / eps << std::endl;
+    }
     exit(0);
 }
 
@@ -578,7 +579,7 @@ bool RodsHook::simulateOneStep()
     rAndJ(*config, 
         r, 
         &Jr, 
-        angleWeight, 
+        constraintWeight, 
         allowSliding, 
         useanchors ? &anchorPoints : NULL, 
         useanchors ? &anchorNormals : NULL);
@@ -598,7 +599,7 @@ bool RodsHook::simulateOneStep()
 
     forceResidual = lineSearch(*config, 
         delta, 
-        angleWeight, 
+        constraintWeight, 
         allowSliding, 
         useanchors ? &anchorPoints : NULL, 
         useanchors ? &anchorNormals : NULL);
