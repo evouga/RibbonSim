@@ -23,6 +23,8 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     F.resize(0, 3);
     renderQ.resize(0, 3);
     renderF.resize(0, 3);
+    enableGravity = false;
+    gravityDir << 0, 0, 1;
 }
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -83,6 +85,15 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             loadTargetMesh();
         }
         ImGui::Checkbox("Stick to Target Mesh", &stickToMesh);
+        ImGui::Checkbox("Enable Gravity", &enableGravity);
+        float gravdir[3];
+        for(int i=0; i<3; i++)
+            gravdir[i] = gravityDir[i];
+        if(ImGui::InputFloat3("Up Direction", gravdir))
+        {
+            for(int i=0; i<3; i++)
+                gravityDir[i] = gravdir[i];
+        }
     }
 
     if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
@@ -105,7 +116,7 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     // Cast a ray in the view direction starting from the mouse position
     double x = viewer.current_mouse_x;
     double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view,
         viewer.core.proj, viewer.core.viewport, this->Q, this->F, fid, bc))
     {
         std::cout << fid << " - clicked on face #\n";

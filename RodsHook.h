@@ -89,6 +89,8 @@ private:
     int iter;
     double forceResidual;
     float constraintWeight;
+    bool enableGravity;
+    Eigen::Vector3d gravityDir;
     bool allowSliding;
     float newWidth;
     float expLenScale;
