@@ -102,13 +102,14 @@ void contactEnergyTerms(RodConfig &config, double constraintWeight, bool allowSl
 
 }
 
+const static double gravityG = 9.8;
+
 void rAndJ(RodConfig &config, 
     Eigen::VectorXd &r, 
     Eigen::SparseMatrix<double> *Jr, 
-    double constraintWeight, 
-    bool allowSliding, 
-    Eigen::MatrixXd *anchorPoints, 
-    Eigen::MatrixXd *anchorNormals)
+    double &linEnergy,
+    Eigen::VectorXd &Jlinear,
+    const SimParams &params)
 {
     int nterms = 0;
     int ndofs = 0;
@@ -119,8 +120,12 @@ void rAndJ(RodConfig &config,
         nterms += config.rods[i]->numSegments(); // stretching
         nterms += 2 * njoints; // bending
         nterms += njoints; // twisting
-        if (anchorPoints)
+        if (params.anchorPoints)
             nterms += 3*config.rods[i]->numVertices();
+        if (params.gravityEnabled)
+        {
+            nterms += config.rods[i]->numVertices(); // floor force
+        }
     } 
 
     int baryoffset = ndofs;
@@ -128,10 +133,14 @@ void rAndJ(RodConfig &config,
 
     nterms += 6 * config.constraints.size(); // constraint positions
     //nterms += config.constraints.size(); // constraint directions
-    nterms += 4 * config.constraints.size(); // barycentric coord inequality constraints
+    nterms += 4 * config.constraints.size(); // barycentric coord inequality constraints    
 
     r.resize(nterms);
     r.setConstant(std::numeric_limits<double>::infinity());
+
+    linEnergy = 0;
+    Jlinear.resize(ndofs);
+    Jlinear.setZero();
 
     if (Jr)
     {
@@ -149,6 +158,39 @@ void rAndJ(RodConfig &config,
         int nverts = (int)state.centerline.rows();
         int nsegs = rod.numSegments();
         int thetaoffset = 3 * rod.numVertices();
+
+        // gravity terms
+        if (params.gravityEnabled)
+        {
+            for (int i = 0; i < nverts; i++)
+            {
+                Eigen::Vector3d pos = state.centerline.row(i).transpose();
+                double mass = rod.masses[i];
+                double potential = pos.dot(params.gravityDir) * gravityG * mass / params.gravityDir.norm();
+                linEnergy += potential;
+                for (int j = 0; j < 3; j++)
+                {
+                    Jlinear[dofoffset + 3 * i + j] += params.gravityDir[j] * gravityG * mass / params.gravityDir.norm();
+                }
+
+                double pendist = params.floorHeight - pos.dot(params.gravityDir) / params.gravityDir.norm();
+                if (pendist > 0)
+                {
+                    r[roffset + i] = sqrt(params.floorWeight) * pendist;
+                    if (Jr)
+                    {
+                        for (int j = 0; j < 3; j++)
+                            J.push_back(Eigen::Triplet<double>(roffset + i, dofoffset + 3 * i + j, -sqrt(params.floorWeight) * params.gravityDir[j] / params.gravityDir.norm()));
+                    }
+                }
+                else
+                {
+                    r[roffset + i] = 0;
+                }
+            }
+
+            roffset += nverts;
+        }
         
         // stretching terms
 
@@ -293,7 +335,7 @@ void rAndJ(RodConfig &config,
     {
         Eigen::Vector3d gap1, gap2;
         Eigen::Matrix<double, 3, 16> J1, J2;
-        contactEnergyTerms(config, constraintWeight, allowSliding, i, gap1, J1, gap2, J2);
+        contactEnergyTerms(config, params.constraintWeight, params.allowSliding, i, gap1, J1, gap2, J2);
 
         const Constraint &c = config.constraints[i];
 
@@ -335,7 +377,7 @@ void rAndJ(RodConfig &config,
                 J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, J1(j, 13)));
                 J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod1offset + 3 * config.rods[c.rod1]->numVertices() + c.seg1, J2(j, 12)));
                 J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j + 3, rod2offset + 3 * config.rods[c.rod2]->numVertices() + c.seg2, J2(j, 13)));
-                if (allowSliding)
+                if (params.allowSliding)
                 {
                     J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, baryoffset + 2 * i, J1(j, 14)));
                     J.push_back(Eigen::Triplet<double>(roffset + 6 * i + j, baryoffset + 2 * i + 1, J1(j, 15)));
@@ -419,7 +461,7 @@ void rAndJ(RodConfig &config,
     for (int i = 0; i < nconstraints; i++)
     {
         const Constraint &c = config.constraints[i];
-        if (!allowSliding || c.rod1 == c.rod2)
+        if (!params.allowSliding || c.rod1 == c.rod2)
         {
             for(int j=0; j<4; j++)
                 r[roffset + 4 * i + j] = 0;            
@@ -467,7 +509,7 @@ void rAndJ(RodConfig &config,
     }
     roffset += 4 * nconstraints;
 
-    if (anchorPoints)
+    if (params.anchorPoints)
     {
         int idx = 0;
         int dofoffset = 0;
@@ -479,8 +521,8 @@ void rAndJ(RodConfig &config,
             int nverts = rod->numVertices();
             for (int i = 0; i < nverts; i++)
             {
-                Eigen::Vector3d disp = rod->curState.centerline.row(i).transpose() - anchorPoints->row(idx/3).transpose();
-                Eigen::Vector3d n = anchorNormals->row(idx/3);                
+                Eigen::Vector3d disp = rod->curState.centerline.row(i).transpose() - params.anchorPoints->row(idx/3).transpose();
+                Eigen::Vector3d n = params.anchorNormals->row(idx/3);                
                 Eigen::Vector3d t1 = perpToVector(n);
                 Eigen::Vector3d t2 = n.cross(t1);
                 r[roffset + idx] = normalStiffness * disp.dot(n);

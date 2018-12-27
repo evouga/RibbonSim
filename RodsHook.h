@@ -83,6 +83,7 @@ private:
     void testFiniteDifferences();
     void saveConfig();
     void hideLongRods();
+    void fitFloorHeight();
 
     std::string loadName;
 
@@ -91,6 +92,8 @@ private:
     float constraintWeight;
     bool enableGravity;
     Eigen::Vector3d gravityDir;
+    double floorHeight;
+    double floorWeight;
     bool allowSliding;
     float newWidth;
     float expLenScale;
@@ -122,5 +125,8 @@ private:
     int segsPerEdge;
     Eigen::MatrixXd renderQ;
     Eigen::MatrixXi renderF;
+    Eigen::MatrixXd floorQ;
+    Eigen::MatrixXi floorF;
+    Eigen::MatrixXd floorColors;
     bool dirty;
 };

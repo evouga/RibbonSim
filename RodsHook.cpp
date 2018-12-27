@@ -24,7 +24,8 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     renderQ.resize(0, 3);
     renderF.resize(0, 3);
     enableGravity = false;
-    gravityDir << 0, 0, 1;
+    gravityDir << 0, 1, 0;
+    floorWeight = 1e-1;
 }
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -85,7 +86,11 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             loadTargetMesh();
         }
         ImGui::Checkbox("Stick to Target Mesh", &stickToMesh);
-        ImGui::Checkbox("Enable Gravity", &enableGravity);
+        if (ImGui::Checkbox("Enable Gravity", &enableGravity))
+        {
+            dirty = true;
+            repaint = true;
+        }
         float gravdir[3];
         for(int i=0; i<3; i++)
             gravdir[i] = gravityDir[i];
@@ -93,7 +98,16 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             for(int i=0; i<3; i++)
                 gravityDir[i] = gravdir[i];
+            repaint = true;
         }
+        if (ImGui::InputDouble("Floor Height", &floorHeight))
+            repaint = true;
+        if (ImGui::Button("Recompute From Rods", ImVec2(-1, 0)))
+        {
+            fitFloorHeight();
+            repaint = true;
+        }
+        ImGui::InputDouble("Floor Penalty", &floorWeight);
     }
 
     if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
@@ -161,6 +175,7 @@ void RodsHook::initSimulation()
     if (!config)
         exit(-1);
     centerScene();
+    fitFloorHeight();
    
     createVisualizationMesh();
     dirty = true;
@@ -186,6 +201,38 @@ void RodsHook::createVisualizationMesh()
     if (!limitRenderLen)
         maxlen = std::numeric_limits<double>::infinity();
     config->createVisualizationMesh(Q, F);    
+
+    // floor
+    Eigen::Vector3d center(0, 0, 0);
+    center += floorHeight * gravityDir / gravityDir.norm();
+    Eigen::Vector3d t0 = perpToVector(gravityDir);
+    t0.normalize();
+    Eigen::Vector3d t1 = gravityDir.cross(t0);
+    t1.normalize();
+    if (enableGravity)
+    {
+        floorQ.resize(5, 3);
+        floorQ.row(0) = center.transpose();
+        floorQ.row(1) = (center + 1000 * t0).transpose();
+        floorQ.row(2) = (center + 1000 * t1).transpose();
+        floorQ.row(3) = (center - 1000 * t0).transpose();
+        floorQ.row(4) = (center - 1000 * t1).transpose();
+
+        floorF.resize(4, 3);
+        floorF << 0, 1, 2,
+            0, 2, 3,
+            0, 3, 4,
+            0, 4, 1;
+
+        floorColors.resize(5, 3);
+        floorColors.setConstant(0.3);
+    }
+    else
+    {
+        floorQ.resize(0, 3);
+        floorF.resize(0, 3);
+        floorColors.resize(0, 3);
+    }
 }
 
 void RodsHook::loadTargetMesh()
@@ -225,10 +272,7 @@ void RodsHook::loadTargetMesh()
 
 double lineSearch(RodConfig &config, 
     const Eigen::VectorXd &update, 
-    double constraintWeight, 
-    bool allowSliding,
-    Eigen::MatrixXd *anchorPoints,
-    Eigen::MatrixXd *anchorNormals)
+    const SimParams &params)
 {
     double t = 1.0;
     double c1 = 0.1;
@@ -239,7 +283,9 @@ double lineSearch(RodConfig &config,
 
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> J;
-    rAndJ(config, r, &J, constraintWeight, allowSliding, anchorPoints, anchorNormals);  
+    double linE;
+    Eigen::VectorXd linterm;
+    rAndJ(config, r, &J, linE, linterm, params);  
 
     Eigen::VectorXd dE;
     Eigen::VectorXd newdE;
@@ -250,8 +296,8 @@ double lineSearch(RodConfig &config,
         start.push_back(config.rods[i]->curState);
     }
     startC = config.constraints;
-    double orig = 0.5 * r.transpose() * r;
-    dE = J.transpose() * r;
+    double orig = 0.5 * r.transpose() * r + linE;
+    dE = J.transpose() * r + linterm;
     double deriv = -dE.dot(update);
     assert(deriv < 0);
 
@@ -289,10 +335,10 @@ double lineSearch(RodConfig &config,
             config.constraints[i].bary2 = startC[i].bary2 - t * update[dofoffset + 2 * i + 1];            
         }
 
-        rAndJ(config, r, &J, constraintWeight, allowSliding, anchorPoints, anchorNormals);
+        rAndJ(config, r, &J, linE, linterm, params);
 
-        double newenergy = 0.5 * r.transpose() * r;
-        newdE = J.transpose() * r;
+        double newenergy = 0.5 * r.transpose() * r + linE;
+        newdE = J.transpose() * r + linterm;
 
         std::cout << "Trying t = " << t << ", energy now " << newenergy << std::endl;
 
@@ -343,15 +389,28 @@ void RodsHook::centerScene()
     origcentroid /= nverts;
     Eigen::MatrixXd A(3, nverts);
     Eigen::MatrixXd B(3, nverts);
+
+    Eigen::Matrix3d projection;
+    if (enableGravity)
+    {
+        projection = Eigen::Matrix3d::Identity() - gravityDir * gravityDir.transpose() / gravityDir.squaredNorm();
+    }
+    else
+    {
+        projection = Eigen::Matrix3d::Identity();
+    }
+
+    Eigen::Vector3d delta = projection * (centroid - origcentroid);
+
     int idx = 0;
     for (int i = 0; i < config->numRods(); i++)
     {
         for (int j = 0; j < config->rods[i]->numVertices(); j++)
         {
-            config->rods[i]->curState.centerline.row(j) -= centroid - origcentroid;
+            config->rods[i]->curState.centerline.row(j) -= delta;
        //     config->rods[i]->startState.centerline.row(j) -= origcentroid;
-            A.col(idx) = config->rods[i]->curState.centerline.row(j).transpose();
-            B.col(idx) = config->rods[i]->startState.centerline.row(j).transpose() - origcentroid;
+            A.col(idx) = projection * config->rods[i]->curState.centerline.row(j).transpose();
+            B.col(idx) = projection * (config->rods[i]->startState.centerline.row(j).transpose() - origcentroid);
             idx++;
         }
     }
@@ -493,13 +552,25 @@ void RodsHook::testFiniteDifferences()
 {
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> Jr;
+    double linE;
+    Eigen::VectorXd Jlin;
+
+    SimParams params;
+    params.allowSliding = allowSliding;
+    params.constraintWeight = constraintWeight;
+    params.anchorPoints = NULL;
+    params.anchorNormals = NULL;
+    params.gravityEnabled = false;
+    params.gravityDir.setZero();
+    params.floorHeight = 0;
+    params.floorWeight = 0;
+
     rAndJ(*config,
         r,
         &Jr,
-        constraintWeight,
-        allowSliding,
-        NULL,
-        NULL);
+        linE,
+        Jlin,
+        params);
     
     Eigen::VectorXd newr;
     double eps = 1e-6;
@@ -561,10 +632,9 @@ void RodsHook::testFiniteDifferences()
     rAndJ(*config,
         newr,
         NULL,
-        constraintWeight,
-        allowSliding,
-        NULL,
-        NULL);
+        linE,
+        Jlin,
+        params);
     std::ofstream ofs("findiff.txt");
     ofs << "exact / findiff:" << std::endl;
     for(int i=0; i<exact.size(); i++)
@@ -579,6 +649,8 @@ bool RodsHook::simulateOneStep()
     //testFiniteDifferences();
     Eigen::VectorXd r;
     Eigen::SparseMatrix<double> Jr;
+    double linE;
+    Eigen::VectorXd Jlin;
     Eigen::MatrixXd anchorPoints;
     Eigen::MatrixXd anchorNormals;
     bool useanchors = false;
@@ -587,21 +659,29 @@ bool RodsHook::simulateOneStep()
         findAnchorPoints(anchorPoints, anchorNormals);
         useanchors = true;
     }
+    SimParams params;
+    params.constraintWeight = constraintWeight;
+    params.allowSliding = allowSliding;
+    params.anchorPoints = useanchors ? &anchorPoints : NULL;
+    params.anchorNormals = useanchors ? &anchorNormals : NULL;
+    params.gravityEnabled = enableGravity;
+    params.gravityDir = gravityDir;
+    params.floorHeight = floorHeight;
+    params.floorWeight = floorWeight;
     rAndJ(*config, 
         r, 
         &Jr, 
-        constraintWeight, 
-        allowSliding, 
-        useanchors ? &anchorPoints : NULL, 
-        useanchors ? &anchorNormals : NULL);
-    std::cout << "Orig energy: " << 0.5 * r.transpose() * r << std::endl;
+        linE,
+        Jlin,
+        params);
+    std::cout << "Orig energy: " << 0.5 * r.transpose() * r + linE << std::endl;
     Eigen::SparseMatrix<double> mat = Jr.transpose() * Jr;
     Eigen::SparseMatrix<double> I(mat.rows(), mat.cols());
     I.setIdentity();    
     double Treg = 1e-6;
     mat += Treg*I;
 
-    Eigen::VectorXd rhs = Jr.transpose() * r;
+    Eigen::VectorXd rhs = Jr.transpose() * r + Jlin;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > solver(mat);
     Eigen::VectorXd delta = solver.solve(rhs);
     if (solver.info() != Eigen::Success)
@@ -610,10 +690,7 @@ bool RodsHook::simulateOneStep()
 
     forceResidual = lineSearch(*config, 
         delta, 
-        constraintWeight, 
-        allowSliding, 
-        useanchors ? &anchorPoints : NULL, 
-        useanchors ? &anchorNormals : NULL);
+        params);
 
     slideConstraints();
     centerScene();
@@ -1046,9 +1123,14 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 {
     if (dirty)
     {
-        viewer.data().clear();
+        for (int i = 0; i < 2; i++)
+        {
+            viewer.selected_data_index = i;
+            viewer.data().clear();
+        }
         dirty = false;
     }
+    viewer.selected_data_index = 0;
     viewer.data().set_mesh(renderQ, renderF);
 
     int faces = renderF.rows();
@@ -1127,10 +1209,39 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
     if(constraintEdges.rows() > 0)
         viewer.data().set_edges(constraintPoints, constraintEdges, constraintColors);
+
+    // floor
+
+    viewer.selected_data_index = 1;
+    viewer.data().set_mesh(floorQ, floorF);
+    viewer.data().set_colors(floorColors);
+    viewer.data().show_lines = false;
 }
 
 void RodsHook::saveConfig()
 {
     if(config)
         writeRod(loadName.c_str() , *config);
+}
+
+void RodsHook::fitFloorHeight()
+{
+    double floorMin = std::numeric_limits<double>::infinity();
+    double floorMax = -std::numeric_limits<double>::infinity();
+    int nrods = config->numRods();
+    for (int i = 0; i < nrods; i++)
+    {
+        int ndofs = config->rods[i]->numVertices();
+        for (int j = 0; j < ndofs; j++)
+        {
+            double h = config->rods[i]->startState.centerline.row(j) * (gravityDir / gravityDir.norm());
+            if (h < floorMin)
+                floorMin = h;
+            if (h > floorMax)
+                floorMax = h;
+        }
+    }
+
+    double fudge = 0.01; // 1% above the bottom of the .rod file
+    floorHeight = floorMin + fudge * (floorMax - floorMin);
 }

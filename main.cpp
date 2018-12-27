@@ -68,9 +68,10 @@ bool drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 int main(int argc, char *argv[])
 {
     igl::opengl::glfw::Viewer viewer;
+    viewer.append_mesh();
 
     hook = new RodsHook();
-
+    
     viewer.data().set_face_based(true);
     viewer.core.is_animating = true;
     viewer.callback_key_pressed = keyCallback;
