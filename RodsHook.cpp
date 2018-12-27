@@ -50,6 +50,10 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             linearSubdivision();
         }
+        if(ImGui::Button("Trim Loose Ends", ImVec2(-1,0)))
+        {
+            trimLooseEnds();
+        }
         if (ImGui::Button("Remove Disabled Rods", ImVec2(-1, 0)))
         {
             deleteInvisibleRods();
@@ -1021,6 +1025,99 @@ void RodsHook::deleteInvisibleRods()
         }
     }
     config->constraints = newconstraints;
+    createVisualizationMesh();
+    updateRenderGeometry();
+}
+
+void RodsHook::trimLooseEnds()
+{
+    int nrods = config->numRods();
+    std::vector<int> firstCrossing(nrods, std::numeric_limits<int>::max());
+    std::vector<int> lastCrossing(nrods, 0);
+    int nconstraints = config->constraints.size();
+    for(int i=0; i<nconstraints; i++)
+    {
+        const Constraint &c = config->constraints[i];
+        firstCrossing[c.rod1] = std::min(firstCrossing[c.rod1], c.seg1);
+        lastCrossing[c.rod1] = std::max(lastCrossing[c.rod1], c.seg1);
+        firstCrossing[c.rod2] = std::min(firstCrossing[c.rod2], c.seg2);
+        lastCrossing[c.rod2] = std::max(lastCrossing[c.rod2], c.seg2);
+    }
+    std::vector<int> rodmap(nrods,-1);
+    std::vector<int> shift(nrods,0);
+    std::vector<Rod *> newrods;
+    int idx = 0;
+    for(int i=0; i<nrods; i++)
+    {
+        Rod *rod = config->rods[i];
+        // do not trim closed rods
+        if(rod->isClosed())
+        {
+            newrods.push_back(rod);
+            rodmap[i] = idx;
+            idx++;
+        }
+        else
+        {
+            if(firstCrossing[i] < lastCrossing[i])
+            {
+                // keep this rod
+                newrods.push_back(rod);
+                rodmap[i] = idx;
+                shift[i] = -firstCrossing[i];
+                idx++;
+                
+                // reindex state. All rods are open so nsegs = nverts-1
+                RodState newstartstate;
+                newstartstate.centerline = rod->startState.centerline.block(firstCrossing[i], 0, 2 + lastCrossing[i] - firstCrossing[i], 3);
+                newstartstate.directors = rod->startState.directors.block(firstCrossing[i], 0, 1 + lastCrossing[i] - firstCrossing[i], 3);
+                newstartstate.thetas = rod->startState.thetas.segment(firstCrossing[i], 1 + lastCrossing[i]-firstCrossing[i]);
+                newstartstate.centerlineVel = rod->startState.centerlineVel.block(firstCrossing[i], 0, 2 + lastCrossing[i] - firstCrossing[i], 3);
+                newstartstate.directorAngVel = rod->startState.directorAngVel.segment(firstCrossing[i], 1 + lastCrossing[i]-firstCrossing[i]);
+                rod->startState = newstartstate;
+
+                RodState newcurstate;
+                newcurstate.centerline = rod->curState.centerline.block(firstCrossing[i], 0, 2 + lastCrossing[i] - firstCrossing[i], 3);
+                newcurstate.directors = rod->curState.directors.block(firstCrossing[i], 0, 1 + lastCrossing[i] - firstCrossing[i], 3);
+                newcurstate.thetas = rod->curState.thetas.segment(firstCrossing[i], 1 + lastCrossing[i]-firstCrossing[i]);
+                newcurstate.centerlineVel = rod->curState.centerlineVel.block(firstCrossing[i], 0, 2 + lastCrossing[i] - firstCrossing[i], 3);
+                newcurstate.directorAngVel = rod->curState.directorAngVel.segment(firstCrossing[i], 1 + lastCrossing[i]-firstCrossing[i]);
+                rod->curState = newcurstate;
+
+                Eigen::VectorXd newwidths;
+                newwidths = rod->widths.segment(firstCrossing[i], 1 + lastCrossing[i] - firstCrossing[i]);
+                rod->widths = newwidths;
+                rod->initializeRestQuantities();
+            }
+            else
+            {
+                delete rod;
+            }
+        }
+    }
+    config->rods = newrods;
+    
+    // fix constraints
+    std::vector<Constraint> newconstraints;
+    for(int i=0; i<nconstraints; i++)
+    {
+        Constraint c = config->constraints[i];
+        if(rodmap[c.rod1] == -1 || rodmap[c.rod2] == -1)
+            continue;
+            
+        Constraint newc;
+        newc.rod1 = rodmap[c.rod1];
+        newc.rod2 = rodmap[c.rod2];
+        newc.stiffness = c.stiffness;
+        newc.assignment = c.assignment;
+        newc.bary1 = c.bary1;
+        newc.bary2 = c.bary2;
+        newc.seg1 = c.seg1 + shift[c.rod1];
+        newc.seg2 = c.seg2 + shift[c.rod2];
+        newconstraints.push_back(newc);
+    }
+    config->constraints = newconstraints;
+    centerScene();
     createVisualizationMesh();
     updateRenderGeometry();
 }

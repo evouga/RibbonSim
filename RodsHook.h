@@ -74,6 +74,7 @@ private:
     void showConstraints();
     void deleteInvisibleRods();
     void linearSubdivision();
+    void trimLooseEnds();
     void exportSomeRods(const char*filename, int firstRod, int numRods);
     void exportWeave();    
     void centerScene();
