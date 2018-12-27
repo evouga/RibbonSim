@@ -26,6 +26,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     enableGravity = false;
     gravityDir << 0, 1, 0;
     floorWeight = 1e-1;
+    rescaleFactor = 1.1;
 }
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -78,6 +79,11 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
             repaint = true;
         if (ImGui::InputFloat("Max Length", &maxRenderLen))
             repaint = true;
+        ImGui::InputDouble("Factor", &rescaleFactor);
+        if(ImGui::Button("Rescale Rods", ImVec2(-1,0)))
+        {
+            rescaleRods(rescaleFactor);
+        }
     }
 
     if (ImGui::CollapsingHeader("Sim Options", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1213,6 +1219,21 @@ void RodsHook::setWidths()
     }
     createVisualizationMesh();
     updateRenderGeometry();  
+}
+
+void RodsHook::rescaleRods(double factor)
+{
+    for(int i=0; i<config->numRods(); i++)
+    {
+        config->rods[i]->startState.centerline *= factor;
+        config->rods[i]->startState.centerlineVel *= factor;
+        config->rods[i]->curState.centerline *= factor;
+        config->rods[i]->curState.centerlineVel *= factor;
+        config->rods[i]->initializeRestQuantities();
+    }
+    centerScene();
+    createVisualizationMesh();
+    updateRenderGeometry();
 }
 
 

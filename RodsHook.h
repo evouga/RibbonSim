@@ -85,6 +85,7 @@ private:
     void saveConfig();
     void hideLongRods();
     void fitFloorHeight();
+    void rescaleRods(double factor);
 
     std::string loadName;
 
@@ -100,6 +101,7 @@ private:
     float expLenScale;
     bool limitRenderLen;
     float maxRenderLen;
+    double rescaleFactor;
 
     RodConfig *config;
 
