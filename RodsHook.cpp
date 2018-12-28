@@ -120,11 +120,41 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         ImGui::InputDouble("Floor Penalty", &floorWeight);
     }
 
-    if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
+    menu.callback_draw_custom_window = [&]()
     {
-        ImGui::Text("Iteration %d", iter);
-        ImGui::Text("Force Residual %f", forceResidual);
-    }
+        // Define next window position + size
+        ImGui::SetNextWindowPos(ImVec2(180.f * menu.menu_scaling(), 10), ImGuiSetCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiSetCond_FirstUseEver);
+        ImGui::Begin(
+            "Stats", nullptr,
+            ImGuiWindowFlags_NoSavedSettings
+        );
+        if (ImGui::CollapsingHeader("Basics", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("Number of Rods: %d", stats.numRods);
+            ImGui::Text("Number of Crossings: %d", stats.numCrossings);
+            ImGui::Text("Total Length: %lf m", stats.totalLength);
+            ImGui::Text("Dimensions: %lf m x %lf m x %lf m", stats.dimensions[0], stats.dimensions[1], stats.dimensions[2]);
+        }
+
+        if (ImGui::CollapsingHeader("Physical Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("Mean Width: %lf m", stats.meanWidth);
+            ImGui::Text("Mean Thickness: %lf m", stats.meanThickness);
+            ImGui::Text("Mean Modulus: %lf MPa", stats.meanModulus / 1e6);
+            ImGui::Text("Mean Density: %lf kg/m^3", stats.meanDensity);
+        }
+
+        if (ImGui::CollapsingHeader("Sim Status", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("Iteration %d", iter);
+            ImGui::Text("Force Residual %f", forceResidual);
+        }
+
+        ImGui::End();
+
+    };
+
     if (repaint)
     {
         hideLongRods();
@@ -1362,4 +1392,58 @@ void RodsHook::fitFloorHeight()
 
     double fudge = 0.01; // 1% above the bottom of the .rod file
     floorHeight = floorMin + fudge * (floorMax - floorMin);
+}
+
+void RodsHook::recomputeStats()
+{
+    int nrods = config->numRods();
+    int nconstraints = config->numConstraints();
+    stats.numRods = nrods;
+    stats.numCrossings = nconstraints;
+
+    double totlen = 0;
+    double totwidth = 0;
+    double totthickness = 0;
+    double totyoungs = 0;
+    double totdensity = 0;
+    double maxpos[3];
+    double minpos[3];
+    for (int i = 0; i < 3; i++)
+    {
+        maxpos[i] = -std::numeric_limits<double>::infinity();
+        minpos[i] = std::numeric_limits<double>::infinity();
+    }
+    int totsegs = 0;
+    for (int i = 0; i < nrods; i++)
+    {
+        int nsegs = config->rods[i]->numSegments();
+        int nverts = config->rods[i]->numVertices();
+        for (int j = 0; j < nverts; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                maxpos[k] = std::max(maxpos[k], config->rods[i]->curState.centerline(j, k));
+                minpos[k] = std::min(minpos[k], config->rods[i]->curState.centerline(j, k));
+            }
+        }
+        for (int j = 0; j < nsegs; j++)
+        {
+            totlen += config->rods[i]->restlens[j];
+            totwidth += config->rods[i]->widths[j];
+            totsegs++;
+        }
+        totthickness += config->rods[i]->params.thickness;
+        totyoungs += config->rods[i]->params.kstretching;
+        totdensity += config->rods[i]->params.rho;
+    }
+
+    for (int j = 0; j < 3; j++)
+        stats.dimensions[j] = maxpos[j] - minpos[j];
+
+    stats.totalLength = totlen;
+
+    stats.meanWidth = totwidth / double(totsegs);
+    stats.meanThickness = totthickness / double(nrods);
+    stats.meanModulus = totyoungs / double(nrods);
+    stats.meanDensity = totdensity / double(nrods);
 }

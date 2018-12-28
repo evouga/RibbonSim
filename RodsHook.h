@@ -1,7 +1,18 @@
 #include "PhysicsHook.h"
 #include "RodEnergy.h"
 
+struct SceneStats
+{
+    int numRods;
+    int numCrossings;
+    double totalLength;
+    double dimensions[3];
 
+    double meanWidth;
+    double meanThickness;
+    double meanModulus;
+    double meanDensity;
+};
 
 class RodsHook : public PhysicsHook
 {
@@ -60,6 +71,7 @@ public:
         }
         
         showConstraints();
+        recomputeStats();
     }
 
     virtual bool simulateOneStep();
@@ -86,6 +98,7 @@ private:
     void hideLongRods();
     void fitFloorHeight();
     void rescaleRods(double factor);
+    void recomputeStats();
 
     std::string loadName;
 
@@ -102,6 +115,7 @@ private:
     bool limitRenderLen;
     float maxRenderLen;
     double rescaleFactor;
+    SceneStats stats;
 
     RodConfig *config;
 
