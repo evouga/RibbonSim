@@ -102,7 +102,7 @@ public:
     int numConstraints() const { return (int)constraints.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
-    Eigen::Vector3d shadeRodSegment(int rod, int segment) const;
+    Eigen::Vector3d shadeRodSegment(Eigen::Vector3d light, int rod, int segment) const;
     void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;

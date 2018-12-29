@@ -71,6 +71,8 @@ int main(int argc, char *argv[])
     viewer.append_mesh();
 
     hook = new RodsHook();
+
+    viewer.core.background_color = Eigen::Vector4f(.9, .9, .7, 1);
     
     viewer.data().set_face_based(true);
     viewer.core.is_animating = true;

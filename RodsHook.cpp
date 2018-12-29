@@ -892,7 +892,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
             Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
             endpoint = seg.norm() * strip_stretch + startpoint;
             pl_l << Point(endpoint, x_shift);
-            Eigen::Vector3d segcolor = config->shadeRodSegment(i, j);
+            Eigen::Vector3d segcolor = config->shadeRodSegment(gravityDir, i, j);
             svg::Color c( segcolor[0] * 255, segcolor[1] * 255, segcolor[2] * 255);
             doc << Line( Point(startpoint, x_shift + strip_width / 2.), Point(endpoint, x_shift + strip_width / 2.), Stroke(strip_width - 6., c) );
    //         pl_center << Point(endpoint, x_shift);
@@ -1308,7 +1308,7 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
         for (int j = 0; j < config->rods[i]->numSegments(); j++)
         {
-            Eigen::Vector3d col = config->shadeRodSegment(i, j);
+            Eigen::Vector3d col = config->shadeRodSegment(gravityDir, i, j);
             for ( int f = 0; f < 8; f++)
             {
                 faceColors.row(pos) = Eigen::Vector4d(col(0), col(1), col(2), transp);

@@ -241,53 +241,54 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
     }
 }
 
-Eigen::Vector3d RodConfig::shadeRodSegment(int rod, int segment) const
+Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int segment) const
 {
-    double minZ = std::numeric_limits<double>::infinity();
-    double maxZ = -std::numeric_limits<double>::infinity();
-    for (int i = 0; i < numRods(); i++)
-    {
-        for (int j = 0; j < rods[i]->numSegments(); j++)
-        {
-            double curPos = rods[i]->startState.centerline(j, 2);
-            if (minZ > curPos)
-            {
-                minZ = curPos;
-            }
-            if (maxZ < curPos)
-            {
-                maxZ = curPos;
-            }
-        }
-    }
+    // double minZ = std::numeric_limits<double>::infinity();
+    // double maxZ = -std::numeric_limits<double>::infinity();
+    // for (int i = 0; i < numRods(); i++)
+    // {
+    //     for (int j = 0; j < rods[i]->numSegments(); j++)
+    //     {
+    //         double curPos = rods[i]->startState.centerline(j, 2);
+    //         if (minZ > curPos)
+    //         {
+    //             minZ = curPos;
+    //         }
+    //         if (maxZ < curPos)
+    //         {
+    //             maxZ = curPos;
+    //         }
+    //     }
+    // }
 
-    double zLevel = rods[rod]->startState.centerline(segment, 2);
-    double scale = (maxZ - zLevel) / (maxZ - minZ);
+    // double zLevel = rods[rod]->startState.centerline(segment, 2);
+    // double scale = (maxZ - zLevel) / (maxZ - minZ);
 
-    double tscale = (zLevel - minZ) / (maxZ - minZ);
-    double highlight = tscale * tscale * tscale * tscale * .5;
+    // double tscale = (zLevel - minZ) / (maxZ - minZ);
+    // double highlight = tscale * tscale * tscale * tscale * .5;
+
+    Eigen::Vector3d blah(light(0), -light(2), light(1));
+    double scale = rods[rod]->curState.directors.row(segment).dot(blah);
+    scale = (scale + 1);
+
 
     Eigen::Vector3d c = rods[rod]->rodColor();
     if (scale > .995)
     {
-        for (int k = 0; k < 3; k++)
-            c[k] = top_color[k];
+
     }
     else if (scale < .008)
     {
-        for (int k = 0; k < 3; k++)
-            c[k] = bottom_color[k];
-        scale = 1.;
-        tscale = 1.;
+        scale = .3;
     }
     else
     {
-        scale = 1 - scale * scale * scale * scale * scale;
+    //    scale = 1 - scale * scale * scale * scale * scale;
     }
     Eigen::Vector3d ret;
-    ret[0] = std::min(c[0] * scale + highlight, 1.);
-    ret[1] = std::min(c[1] * scale + highlight, 1.);
-    ret[2] = std::min(c[2] * scale + highlight, 1.);
+    ret[0] = std::min(c[0] * scale, 1.);
+    ret[1] = std::min(c[1] * scale, 1.);
+    ret[2] = std::min(c[2] * scale, 1.);
 
     return ret;
 }
