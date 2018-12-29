@@ -19,6 +19,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     maxRenderLen = 1.0;
     limitRenderLen = false;
     rodsPerSVG = 10;
+    flipExportNormal = false;
     Q.resize(0, 3);
     F.resize(0, 3);
     renderQ.resize(0, 3);
@@ -64,6 +65,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             exportWeave();
         }
+        ImGui::Checkbox("Flip Export Normal", &flipExportNormal);
         ImGui::InputFloat("Export Length Scale", &expLenScale);
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
         
@@ -840,6 +842,9 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
 
         Eigen::Vector3d n = r1.cross(r2).normalized();
         if ( n.dot(n_r1) < .01 )
+            n *= -1;
+
+        if ( flipExportNormal )
             n *= -1;
 
         Eigen::Matrix3d f1;

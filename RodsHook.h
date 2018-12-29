@@ -113,6 +113,7 @@ private:
     float newWidth;
     float expLenScale;
     bool limitRenderLen;
+    bool flipExportNormal;
     float maxRenderLen;
     double rescaleFactor;
     SceneStats stats;
