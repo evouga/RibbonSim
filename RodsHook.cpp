@@ -769,9 +769,11 @@ void RodsHook::exportWeave()
 
 void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
 {
+    // strip width * 9 = 8.5 inches -----> 47 units per inch
+    // 1m = 39.3 inches.  Thus the product is 2303 units per meter
     double strip_width = 45.;
     double strip_space = 10.;
-    double strip_stretch = 600. * expLenScale;
+    double strip_stretch = 2303. * expLenScale;
     double label_spacing = 90.;
 
     enum Defaults { Transparent = -1, Aqua, Black, Blue, Brown, Cyan, Fuchsia,
@@ -782,21 +784,23 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
     int colorlen = 7;
 
     int maxlen = 0;
-    double maxseg = 0;
+    double maxTotLen = 0;
     for (int i = 0; i < config->numRods(); i++) 
     {  
+        double curLen = 0;
         if (config->rods[i]->numSegments() > maxlen) 
             maxlen = config->rods[i]->numSegments();
 
         for (int j = 0; j < config->rods[i]->numSegments() - 1; j++)
         {
             Eigen::Vector3d seg = config->rods[i]->curState.centerline.row(j) - config->rods[i]->curState.centerline.row(j + 1);
-            if ( seg.norm() > maxseg )
-                maxseg = seg.norm(); // Can opt w/ norm squared if slow...
+            curLen += seg.norm();
         }
+        if (maxTotLen < curLen)
+            maxTotLen = curLen;
     } 
 
-    Dimensions dimensions(strip_stretch * maxlen * maxseg, (numRods + 1) * (strip_width + strip_space));
+    Dimensions dimensions(strip_stretch * maxTotLen + 10, (numRods) * (strip_width + strip_space) + strip_space * 2);
     Document doc(filename, Layout(dimensions, Layout::BottomLeft));
 
     Eigen::MatrixXi collisions = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
@@ -857,13 +861,6 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
         f2.col(1) = n.cross(r2);
         f2.col(2) = n;
 
-        // Eigen::Matrix3d f3 = Eigen::Matrix3d::Identity();
-        // f3.col(2) = n;
-        // Eigen::Matrix3d toPlane = f3.inverse();
-        // f1 = toPlane * f1;
-        // f2 = toPlane * f2;
-
-  //      std::cout << f1 << "\n";
 
         if ( c.assignment > 0 )
         {
@@ -887,9 +884,9 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
     //    Polyline pl_center(Fill(Color::Transparent), Stroke(strip_width - 6., clist[i % colorlen]));
         svg::Polyline pl_l(Fill(Color::Transparent), Stroke(4., Color::Black));
         svg::Polyline pl_r(Stroke(.5, Color::Black));
-        double startpoint = 0.;
+        double startpoint = 10.;
         double endpoint;
-        double x_shift = (i-firstRod) * (strip_width + strip_space);
+        double x_shift = (i-firstRod) * (strip_width + strip_space) + strip_space;
         pl_l << Point(startpoint, x_shift);
   //      pl_center << Point(startpoint, x_shift);
         for (int j = 0; j < r->numSegments(); j++)
@@ -914,7 +911,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
     for (int i = firstRod; i < firstRod+numRods; i++) 
     {
         Rod *r = config->rods[i];
-        double startpoint = 0.;
+        double startpoint = 10.;
         double endpoint;
         double x_shift = (i-firstRod) * (strip_width + strip_space) + strip_space;
         double lasttext = -200.;
@@ -927,7 +924,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
             startpoint = endpoint;
             if ( collisions(i,j) != 0) 
             { 
-                double y_center = (i-firstRod) * (strip_width + strip_space) + .5 * strip_width;
+                double y_center = (i-firstRod) * (strip_width + strip_space) + .5 * strip_width + strip_space;
                 if ( self_intersect(i,j) == -1 ) {}
                 else if ( self_intersect(i,j) > 0 )
                 {
