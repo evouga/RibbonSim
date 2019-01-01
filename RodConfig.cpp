@@ -273,13 +273,13 @@ Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int s
 
 
     Eigen::Vector3d c = rods[rod]->rodColor();
-    if (scale > .995)
+    if (scale > 1.2)
     {
-
+        scale = 1.2;
     }
-    else if (scale < .008)
+    else if (scale < .01)
     {
-        scale = .3;
+        scale *= 20;
     }
     else
     {
