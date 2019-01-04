@@ -80,6 +80,7 @@ public:
 
     void saveRods();
     void setWidths();
+    void setThicknesses();
 
 private:    
     void createVisualizationMesh();
@@ -111,6 +112,7 @@ private:
     double floorWeight;
     bool allowSliding;
     float newWidth;
+    double newThickness;
     float expLenScale;
     bool limitRenderLen;
     bool flipExportNormal;

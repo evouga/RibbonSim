@@ -6,7 +6,7 @@
 #include <Eigen/Dense>
 #include <igl/point_mesh_squared_distance.h>
 
-RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWeight(1e3), newWidth(0.01), 
+RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWeight(1e3), newWidth(0.01), newThickness(1e-4),
                                       dirty(true), config(NULL), expLenScale(1.0) 
 {
     savePrefix = "rod_";
@@ -72,11 +72,22 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         if (ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh))
             repaint = true;
         
-        if (ImGui::Button("Set Widths", ImVec2(-1, 0)))
+        if (ImGui::CollapsingHeader("Override Geometry", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            setWidths();
+    
+            if (ImGui::Button("Set Widths", ImVec2(-1, 0)))
+            {
+                setWidths();
+            }
+            ImGui::InputFloat("New Widths", &newWidth);                
+            
+            if (ImGui::Button("Set Thicknesses", ImVec2(-1, 0)))
+            {
+                setThicknesses();                
+            }
+            ImGui::InputDouble("New Thicknesses", &newThickness);
         }
-        ImGui::InputFloat("New Widths", &newWidth);                
+        
         if (ImGui::Checkbox("Show Only Short Rods", &limitRenderLen))
             repaint = true;
         if (ImGui::InputFloat("Max Length", &maxRenderLen))
@@ -1248,6 +1259,18 @@ void RodsHook::setWidths()
         {
             config->rods[i]->widths[j] = newWidth;
         }
+        config->rods[i]->initializeRestQuantities();
+    }
+    createVisualizationMesh();
+    updateRenderGeometry();  
+}
+
+void RodsHook::setThicknesses()
+{
+    for(int i=0; i<config->numRods(); i++)
+    {
+        config->rods[i]->params.thickness = newThickness;
+        config->rods[i]->initializeRestQuantities();
     }
     createVisualizationMesh();
     updateRenderGeometry();  
