@@ -267,7 +267,8 @@ Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int s
     // double tscale = (zLevel - minZ) / (maxZ - minZ);
     // double highlight = tscale * tscale * tscale * tscale * .5;
 
-    Eigen::Vector3d blah(light(0), -light(2), light(1));
+   // Eigen::Vector3d blah(light(0), -light(2), light(1));
+    Eigen::Vector3d blah(light(0), light(1), light(2));
     double scale = rods[rod]->curState.directors.row(segment).dot(blah);
     scale = (scale + 1);
 
@@ -277,9 +278,11 @@ Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int s
     {
         scale = 1.2;
     }
-    else if (scale < .01)
+    else if (scale < .4)
     {
-        scale *= 20;
+        scale = sqrt(scale) + .12;
+        if (scale > .4)
+            scale = .4;
     }
     else
     {

@@ -918,6 +918,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
         doc << pl_r << pl_l;
     }
 
+    bool numberInWhite = true;
     // Draw crossings and labels 
     for (int i = firstRod; i < firstRod+numRods; i++) 
     {
@@ -960,6 +961,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
                 }
                 else 
                 {
+                    y_center += strip_space;
                     mark_crossing = svg::Polyline(Fill(Color::Transparent), Stroke(2., clist[mark_cidx]));
                 }
 
@@ -970,10 +972,17 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
 
         //        std::cout << orient.col(2) << "\n";
 
+
                 mark_crossing << Point( endpoint + pos_x(0) + pos_y(0) * (1.),   pos_x(1) + pos_y(1) * (1.) + y_center )
                               << Point( endpoint + pos_x(0) - pos_y(0) * (1.),   pos_x(1) - pos_y(1) * (1.) + y_center )
                               << Point( endpoint - pos_x(0) - pos_y(0) * (1.), - pos_x(1) - pos_y(1) * (1.) + y_center )
                               << Point( endpoint - pos_x(0) + pos_y(0) * (1.), - pos_x(1) + pos_y(1) * (1.) + y_center );
+
+                // hack to see the bottom of the thin ones.  
+                if (collisions(i,j) > 0)
+                {
+                    y_center -= strip_space;
+                }
 
 
                 // mark_crossing << Point( endpoint + pos_x(0),   pos_x(1) + y_center )
@@ -990,15 +999,20 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
                 else {
                     doc << mark_crossing;
                     char shift = clist_char[collisions_circ_match(i,j) % colorlen];
-                    doc << svg::Text(Point(endpoint - 10, x_shift  - strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(10, "Verdana"));
-                    doc << svg::Text(Point(endpoint + 10, x_shift - strip_space / 2 + strip_width / 2.), std::to_string(abs(collisions(i,j))) + shift, Color::White, Font(10, "Verdana"));
+                    doc << svg::Text(Point(endpoint - 10, x_shift  + strip_space / 2), std::to_string(abs(collisions(i,j))) + shift, Color::Black, Font(10, "Verdana"));
+                    doc << svg::Text(Point(endpoint + 10, x_shift + strip_space / 2 + strip_width / 2.), std::to_string(abs(collisions(i,j))) + shift, Color::White, Font(10, "Verdana"));
                     lasttext = endpoint;
                 }
             } 
             if (lasttext < endpoint - label_spacing) 
             {
      //           std::cout << endpoint << "\n";
-                doc << svg::Text(Point(endpoint, x_shift - strip_space / 2 + strip_width / 2. - 9), std::to_string(i + 1), Color::White, Font(14, "Verdana"));
+                if (numberInWhite)
+                    doc << svg::Text(Point(endpoint, x_shift + strip_space / 2 + strip_width / 2. - 14), std::to_string(i + 1), Color::White, Font(21, "Verdana"));
+                else 
+                    doc << svg::Text(Point(endpoint, x_shift + strip_space / 2 + strip_width / 2. - 14), std::to_string(i + 1), Color::Black, Font(21, "Verdana"));
+                numberInWhite = !numberInWhite;
+
                 lasttext = endpoint;
             }
         }
@@ -1305,6 +1319,7 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     }
     viewer.selected_data_index = 0;
     viewer.data().set_mesh(renderQ, renderF);
+        viewer.data().show_lines = false; // urg, fix the toggle 
 
     int faces = renderF.rows();
     faceColors.resize(faces, 4);
