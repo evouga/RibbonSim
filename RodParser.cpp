@@ -130,6 +130,14 @@ RodConfig *readRod(const char *filename)
         {
             ifs >> widths[i];
         }        
+        if (version > 1)
+        {
+            for(int i=0; i<nsegs; i++)
+            {
+                int dummy;
+                ifs >> dummy;
+            }
+        }
         if(nverts >= 2)
         {
             Rod *r = new Rod(rs, widths, params, isclosed, colorID);
