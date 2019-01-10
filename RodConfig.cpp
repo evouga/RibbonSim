@@ -22,6 +22,8 @@ Rod::Rod(const RodState &startState, const Eigen::VectorXd &segwidths, RodParams
         double dotprod = e.dot(startState.directors.row(i));
         assert(fabs(dotprod) < 1e-6);
     }
+    segColors.resize(nsegs);
+    segColors.setConstant(colorID);
     curState = startState;
     widths = segwidths;
     initializeRestQuantities();
@@ -64,6 +66,14 @@ Eigen::Vector3d Rod::rodColor() const
     Eigen::Vector3d ret;
     for (int i = 0; i < 3; i++)
         ret[i] = rod_colors[colorID_][i];
+    return ret;
+}
+
+Eigen::Vector3d Rod::rodColor(int seg) const
+{
+    Eigen::Vector3d ret;
+    for (int i = 0; i < 3; i++)
+        ret[i] = rod_colors[segColors[seg]][i];
     return ret;
 }
 
@@ -241,7 +251,7 @@ void RodConfig::createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F)
     }
 }
 
-Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int segment) const
+Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int segment, bool showCovers) const
 {
     // double minZ = std::numeric_limits<double>::infinity();
     // double maxZ = -std::numeric_limits<double>::infinity();
@@ -273,7 +283,11 @@ Eigen::Vector3d RodConfig::shadeRodSegment(Eigen::Vector3d light, int rod, int s
     scale = (scale + 1);
 
 
-    Eigen::Vector3d c = rods[rod]->rodColor();
+    Eigen::Vector3d c;
+    if(showCovers)
+        c = rods[rod]->rodColor(segment);
+    else
+        c = rods[rod]->rodColor();
     if (scale > 1.2)
     {
         scale = 1.2;

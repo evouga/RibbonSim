@@ -58,6 +58,7 @@ public:
     RodVisibilityState visibilityState() const { return visState_; }
 
     Eigen::Vector3d rodColor() const;
+    Eigen::Vector3d rodColor(int seg) const;
     int rodColorID() const { return colorID_; }
     void cycleColor();
     int numVertices() const { return (int)curState.centerline.rows(); }
@@ -70,6 +71,7 @@ public:
     Eigen::VectorXd restlens;
     Eigen::VectorXd masses;
     Eigen::VectorXd momInertia;
+    Eigen::VectorXi segColors;
     RodParams params;
 
 
@@ -102,7 +104,7 @@ public:
     int numConstraints() const { return (int)constraints.size(); }
     void reset();
     void createVisualizationMesh(Eigen::MatrixXd &Q, Eigen::MatrixXi &F);
-    Eigen::Vector3d shadeRodSegment(Eigen::Vector3d light, int rod, int segment) const;
+    Eigen::Vector3d shadeRodSegment(Eigen::Vector3d light, int rod, int segment, bool showCover) const;
     void saveRodGeometry(const std::string &prefix);
 
     std::vector<Rod *> rods;

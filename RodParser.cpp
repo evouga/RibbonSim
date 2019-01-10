@@ -129,19 +129,24 @@ RodConfig *readRod(const char *filename)
         for (int i = 0; i < nsegs; i++)
         {
             ifs >> widths[i];
-        }        
+        }       
+        Eigen::VectorXi segColors(nsegs); 
         if (version > 1)
         {
             for(int i=0; i<nsegs; i++)
             {
-                int dummy;
-                ifs >> dummy;
+                ifs >> segColors[i];
             }
         }
+        else
+        {
+            segColors.setZero();
+        }        
         if(nverts >= 2)
         {
             Rod *r = new Rod(rs, widths, params, isclosed, colorID);
             r->setVisibilityState(Rod::RodVisibilityState::RS_VISIBLE);
+            r->segColors = segColors;
             ret->addRod(r);
         }
         else
@@ -242,7 +247,7 @@ void writeRod(const char *filename, const RodConfig &config)
         return;
 
     ofs << -217 << std::endl;
-    ofs << 1 << std::endl;
+    ofs << 2 << std::endl;
     ofs << config.numRods() << std::endl;
     ofs << config.numConstraints() << std::endl;
     ofs << config.rods[0]->params.thickness << std::endl;
@@ -280,6 +285,11 @@ void writeRod(const char *filename, const RodConfig &config)
         for (int i = 0; i < config.rods[rod]->numSegments(); i++)
         {
             ofs << config.rods[rod]->widths[i] << " ";
+        }
+        ofs << std::endl;
+        for (int i = 0; i < config.rods[rod]->numSegments(); i++)
+        {
+            ofs << config.rods[rod]->segColors[i] << " ";
         }
         ofs << std::endl;
     }

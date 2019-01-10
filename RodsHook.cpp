@@ -28,6 +28,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     gravityDir << 0, 1, 0;
     floorWeight = 1e-1;
     rescaleFactor = 1.1;
+    showCoverColors = false;
 }
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -68,6 +69,7 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         ImGui::Checkbox("Flip Export Normal", &flipExportNormal);
         ImGui::InputFloat("Export Length Scale", &expLenScale);
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
+        ImGui::Checkbox("Show Cover Colors", &showCoverColors);
         
         if (ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh))
             repaint = true;
@@ -905,7 +907,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
             Eigen::Vector3d seg = r->curState.centerline.row(j) - r->curState.centerline.row(j + 1);
             endpoint = seg.norm() * strip_stretch + startpoint;
             pl_l << Point(endpoint, x_shift);
-            Eigen::Vector3d segcolor = config->shadeRodSegment(gravityDir, i, j);
+            Eigen::Vector3d segcolor = config->shadeRodSegment(gravityDir, i, j, showCoverColors);
             svg::Color c( segcolor[0] * 255, segcolor[1] * 255, segcolor[2] * 255);
             doc << Line( Point(startpoint, x_shift + strip_width / 2.), Point(endpoint, x_shift + strip_width / 2.), Stroke(strip_width - 6., c) );
    //         pl_center << Point(endpoint, x_shift);
@@ -1150,6 +1152,9 @@ void RodsHook::trimLooseEnds()
                 Eigen::VectorXd newwidths;
                 newwidths = rod->widths.segment(firstCrossing[i], 1 + lastCrossing[i] - firstCrossing[i]);
                 rod->widths = newwidths;
+                Eigen::VectorXi newsegcolors;
+                newsegcolors = rod->segColors.segment(firstCrossing[i], 1+lastCrossing[i] - firstCrossing[i]);
+                rod->segColors = newsegcolors;
                 rod->initializeRestQuantities();
             }
             else
@@ -1223,6 +1228,13 @@ void RodsHook::linearSubdivision()
             newwidths[2*j+1] = config->rods[i]->widths[j];
         }
         config->rods[i]->widths = newwidths;
+        Eigen::VectorXi newsegcolors(2*nsegs);
+        for(int j=0; j<nsegs; j++)
+        {
+            newsegcolors[2*j] = config->rods[i]->segColors[j];
+            newsegcolors[2*j+1] = config->rods[i]->segColors[j];
+        }
+        config->rods[i]->segColors = newsegcolors;
         config->rods[i]->initializeRestQuantities();
     }
 
@@ -1348,7 +1360,7 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 
         for (int j = 0; j < config->rods[i]->numSegments(); j++)
         {
-            Eigen::Vector3d col = config->shadeRodSegment(gravityDir, i, j);
+            Eigen::Vector3d col = config->shadeRodSegment(gravityDir, i, j, showCoverColors);
             for ( int f = 0; f < 8; f++)
             {
                 faceColors.row(pos) = Eigen::Vector4d(col(0), col(1), col(2), transp);

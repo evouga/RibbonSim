@@ -119,6 +119,7 @@ private:
     float maxRenderLen;
     double rescaleFactor;
     SceneStats stats;
+    bool showCoverColors;
 
     RodConfig *config;
 

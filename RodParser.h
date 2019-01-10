@@ -24,6 +24,7 @@
  * (list of 3*NS doubles)  orientation of the centerline segments (segment i connects vertex i and i+1). This vector specifies the "thickness" direction of the rod. It does not need to be normalized but must be perpendicular to its segment.
  * (list of NS doubles)    twists theta of each segment
  * (list of NS double)     width of each rod segment (in meters)
+ * (list of NS ints)       original cover the segment lied on
  *
  * Each constraint consists of
  * (int)     first rod coupled by the constraint (zero-indexed)
