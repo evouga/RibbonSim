@@ -188,7 +188,6 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view,
         viewer.core.proj, viewer.core.viewport, this->Q, this->F, fid, bc))
     {
-        std::cout << fid << " - clicked on face #\n";
         int prevId = 0;
         int nextId = 0;
         for (int i = 0; i < config->numRods(); i++)
@@ -196,6 +195,7 @@ bool RodsHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
             nextId += config->rods[i]->numSegments() * 8;
             if (fid < nextId && fid > prevId)
             {
+                std::cout << i + 1 << " - clicked on rod #\n";
                 if ( button == 0 )
                 {
                     if (config->rods[i]->visibilityState() == Rod::RodVisibilityState::RS_TRANSLUCENT)
