@@ -335,6 +335,10 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
 
         Eigen::MatrixXd Q(4 * nverts, 3);
         Eigen::MatrixXi F(8 * nsegs, 3);
+        
+        std::stringstream ss2;
+        ss2 << prefix << rod << "_colors.csv";        
+        std::ofstream ofs(ss2.str().c_str());
 
         for (int i = 0; i < nsegs; i++)
         {
@@ -380,6 +384,12 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             F(8 * i + 7, 0) = 4 * i + 3;
             F(8 * i + 7, 1) = 4 * (i+1) + 3;
             F(8 * i + 7, 2) = 4 * (i+1) + 1;
+            
+            for(int j=0; j<8; j++)
+            {
+                Eigen::Vector3d c = rods[rod]->rodColor(i);
+                ofs << c[0] << ",\t" << c[1] << ",\t" << c[2] << std::endl;
+            }
         }
 
         std::stringstream ss;
