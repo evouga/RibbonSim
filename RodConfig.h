@@ -16,6 +16,16 @@ const static double rod_colors[][3] = {
     { 0.001, 0.95, 0.95 }      
 };
 
+const static double rod_cover_colors[][3] = { 
+    { .001, .001, .95 },
+    { 0.95, 0.001, 0.001 },
+    { 0.5, 0.5, 0.5 },
+    { 0.01, 0.95, 0.01 },
+    { 0.95, 0.7, 0.01 },
+    { 0.5, 0.01, 0.5 },
+    { 0.001, 0.95, 0.95 }      
+};
+
 const static double top_color[3] = { .5, 0, 0 };
 const static double bottom_color[3] = { .7, .7, .2 };
 
