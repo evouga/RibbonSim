@@ -73,7 +73,7 @@ Eigen::Vector3d Rod::rodColor(int seg) const
 {
     Eigen::Vector3d ret;
     for (int i = 0; i < 3; i++)
-        ret[i] = rod_colors[segColors[seg]][i];
+        ret[i] = rod_cover_colors[segColors[seg]][i];
     return ret;
 }
 
@@ -334,7 +334,12 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
         }
 
         Eigen::MatrixXd Q(4 * nverts, 3);
+        Q.setZero();
         Eigen::MatrixXi F(8 * nsegs, 3);
+        
+        std::stringstream ss2;
+        ss2 << prefix << rod << "_colors.csv";        
+        std::ofstream ofs(ss2.str().c_str());
 
         for (int i = 0; i < nsegs; i++)
         {
@@ -342,44 +347,67 @@ void RodConfig::saveRodGeometry(const std::string &prefix)
             Eigen::Vector3d v1 = rods[rod]->curState.centerline.row((i + 1) % nverts);
             Eigen::Vector3d T = v1 - v0;
             T /= T.norm();
+            int nexti = (i+1)%nverts;
             
-            Q.row(4 * i + 0) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * i + 1) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 0) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 1) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 0) += (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 1) += (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * nexti + 0) += (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * nexti + 1) += (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) + rods[rod]->params.thickness / 2.0 * N.row(i));
 
-            Q.row(4 * i + 2) = (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * i + 3) = (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 2) = (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) -  rods[rod]->params.thickness / 2.0 * N.row(i));
-            Q.row(4 * (i+1) + 3) = (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) -  rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 2) += (v0.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * i + 3) += (v0.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) - rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * nexti + 2) += (v1.transpose() - rods[rod]->widths[i] / 2.0 * B.row(i) -  rods[rod]->params.thickness / 2.0 * N.row(i));
+            Q.row(4 * nexti + 3) += (v1.transpose() + rods[rod]->widths[i] / 2.0 * B.row(i) -  rods[rod]->params.thickness / 2.0 * N.row(i));
             
             F(8 * i + 0, 0) = 4 * i + 0;
             F(8 * i + 0, 1) = 4 * i + 1;
-            F(8 * i + 0, 2) = 4 * (i+1) + 0;
-            F(8 * i + 1, 0) = 4 * (i+1) + 0;
+            F(8 * i + 0, 2) = 4 * nexti + 0;
+            F(8 * i + 1, 0) = 4 * nexti + 0;
             F(8 * i + 1, 1) = 4 * i + 1;
-            F(8 * i + 1, 2) = 4 * (i+1) + 1;
+            F(8 * i + 1, 2) = 4 * nexti + 1;
 
             F(8 * i + 2, 0) = 4 * i + 3;
             F(8 * i + 2, 1) = 4 * i + 2;
-            F(8 * i + 2, 2) = 4 * (i+1) + 2;
-            F(8 * i + 3, 0) = 4 * (i+1) + 3;
+            F(8 * i + 2, 2) = 4 * nexti + 2;
+            F(8 * i + 3, 0) = 4 * nexti + 3;
             F(8 * i + 3, 1) = 4 * i + 3;
-            F(8 * i + 3, 2) = 4 * (i+1) + 2;
+            F(8 * i + 3, 2) = 4 * nexti + 2;
 
             F(8 * i + 4, 0) = 4 * i + 0;
-            F(8 * i + 4, 1) = 4 * (i+1) + 0;
+            F(8 * i + 4, 1) = 4 * nexti + 0;
             F(8 * i + 4, 2) = 4 * i + 2;
             F(8 * i + 5, 0) = 4 * i + 2;
-            F(8 * i + 5, 1) = 4 * (i+1) + 0;
-            F(8 * i + 5, 2) = 4 * (i+1) + 2;
+            F(8 * i + 5, 1) = 4 * nexti + 0;
+            F(8 * i + 5, 2) = 4 * nexti + 2;
 
             F(8 * i + 6, 0) = 4 * i + 3;
-            F(8 * i + 6, 1) = 4 * (i+1) + 1;
+            F(8 * i + 6, 1) = 4 * nexti + 1;
             F(8 * i + 6, 2) = 4 * i + 1;
             F(8 * i + 7, 0) = 4 * i + 3;
-            F(8 * i + 7, 1) = 4 * (i+1) + 3;
-            F(8 * i + 7, 2) = 4 * (i+1) + 1;
+            F(8 * i + 7, 1) = 4 * nexti + 3;
+            F(8 * i + 7, 2) = 4 * nexti + 1;
+            
+            for(int j=0; j<8; j++)
+            {
+                Eigen::Vector3d c = rods[rod]->rodColor(i);
+                ofs << c[0] << ",\t" << c[1] << ",\t" << c[2] << std::endl;
+            }
+        }
+
+        for(int i=1; i<nverts-1; i++)
+        {
+            for(int j=0; j<4; j++)
+            {
+                Q.row(4*i+j) *= 0.5;
+            }
+        }
+        if(rods[rod]->isClosed())
+        {
+            for(int j=0; j<4; j++)
+            {
+                Q.row(4*0 + j) *= 0.5;
+                Q.row(4*(nverts-1) + j) *= 0.5;
+            }
         }
 
         std::stringstream ss;
