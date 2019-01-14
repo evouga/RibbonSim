@@ -13,8 +13,8 @@ This should find and build the dependencies and create a `rods_bin` binary.
 
 ## Run
 
-From within the root directory just issue:
+From within the build directory just issue:
 
-    ./build/rods_bin
+    ./rods_bin
 
 You will need to load in .rod files exported by the relax-field utility.
