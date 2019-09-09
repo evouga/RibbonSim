@@ -29,6 +29,7 @@ RodsHook::RodsHook() : PhysicsHook(), iter(0), forceResidual(0.0), constraintWei
     floorWeight = 1e-1;
     rescaleFactor = 1.1;
     showCoverColors = false;
+    showRodMesh = false;
 }
 
 void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -66,10 +67,15 @@ void RodsHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         {
             exportWeave();
         }
+        if (ImGui::Button("Export X-Shell", ImVec2(-1, 0)))
+        {
+            exportXShell();
+        }
         ImGui::Checkbox("Flip Export Normal", &flipExportNormal);
         ImGui::InputFloat("Export Length Scale", &expLenScale);
         ImGui::Checkbox("Show Constraints", &visualizeConstraints);
         ImGui::Checkbox("Show Cover Colors", &showCoverColors);
+        ImGui::Checkbox("Show Rod Mesh", &showRodMesh);
         
         if (ImGui::Checkbox("Show Target Mesh", &visualizeTargetMesh))
             repaint = true;
@@ -780,6 +786,117 @@ void RodsHook::exportWeave()
     }
 }
 
+void RodsHook::exportXShell()
+{
+    int part = 0;
+    int nrods = config->numRods();
+    int start = 0;
+
+    std::ofstream ofs("xshell__.obj");
+ //   std::cout << "here \n";
+    // for (int i = 0; i < config->numRods(); i++) 
+    // {
+    //     ofs << config->rods[i]->rodColorID() << " ";
+    // }
+
+    // std::stringstream ss;
+    // ss << "xshell_" << loadName << "_.obj"; // TODO: make this better
+
+    // --------------------------------------------
+
+    // for (int i = 0; i < constraints.size(); i++)
+    // {
+    //     constraints.visited = false;
+    //     startassignment *= -1;
+    //     int curassignment = startassignment;
+    //     std::sort(cmap[i].begin(), cmap[i].end(), compWeaveConstraint);
+    //     for (int j = 0; j < cmap[i].size(); j++)
+    //     { 
+    //         if ( constraints[cmap[i][j].cId].visited )
+    //         { 
+    //             curassignment = constraints[cmap[i][j].cId].assignment * -1;   
+    //         } 
+    //         else 
+    //         { 
+    //             constraints[cmap[i][j].cId].assignment = curassignment; 
+    //             curassignment *= -1;
+    //             constraints[cmap[i][j].cId].visited = true;
+    //         } 
+
+    //     } 
+    // } 
+
+
+    // --------------------------------------------
+
+    int maxlen = 0;
+    double maxTotLen = 0;
+    for (int i = 0; i < config->numRods(); i++) 
+    {  
+        double curLen = 0;
+        if (config->rods[i]->numSegments() > maxlen) 
+            maxlen = config->rods[i]->numSegments();
+
+        for (int j = 0; j < config->rods[i]->numSegments() - 1; j++)
+        {
+            Eigen::Vector3d seg = config->rods[i]->curState.centerline.row(j) - config->rods[i]->curState.centerline.row(j + 1);
+            curLen += seg.norm();
+        }
+        if (maxTotLen < curLen)
+            maxTotLen = curLen;
+    } 
+
+    Eigen::MatrixXi collisions = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
+    Eigen::MatrixXd collisions_bary = Eigen::MatrixXd::Constant(config->numRods(), maxlen, 0);
+    Eigen::MatrixXi self_intersect = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0);
+    Eigen::MatrixXi angles = Eigen::MatrixXi::Constant(config->numRods(), maxlen, 0.);
+    std::vector<Eigen::Matrix3d> rotations;
+    rotations.push_back( Eigen::MatrixXd::Identity(3,3) );
+
+    for (int i = 0; i < config->numConstraints(); i++)
+    {
+        Constraint c = config->constraints[i];
+        collisions(c.rod1, c.seg1) = (1 + c.rod2) * c.assignment;
+        collisions(c.rod2, c.seg2) = (1 + c.rod1) * c.assignment * -1;
+
+        if (c.rod1 == c.rod2)
+        {
+            self_intersect(c.rod1, c.seg1) = 1;
+            self_intersect(c.rod2, c.seg2) = 1;
+        } 
+
+        int nverts1 = config->rods[c.rod1]->numVertices();
+        Eigen::Vector3d p1 = config->rods[c.rod1]->curState.centerline.row(c.seg1);
+        Eigen::Vector3d p2 = config->rods[c.rod1]->curState.centerline.row((c.seg1 + 1) % nverts1);
+
+        Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
+
+        collisions_bary(c.rod1, c.seg1) = i;
+        collisions_bary(c.rod2, c.seg2) = i;
+        ofs << "v " << pt1.transpose() << std::endl;
+    }
+
+    // Connect lines
+    for (int i = 0; i < config->numRods(); i++) 
+    {
+        Rod *r = config->rods[i];
+        int firstIdx = -1;
+        for (int j = 0; j < r->numSegments() - 1; j++)
+        { 
+            if ( collisions(i,j) != 0) 
+            { 
+                if (firstIdx >= 0)
+                {
+                    ofs << "l " << firstIdx << " " << collisions_bary(i, j) << std::endl;
+                }
+                firstIdx = j;
+            }
+        }
+    }
+
+
+}
+
 void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
 {
     // strip width * 9 = 8.5 inches -----> 47 units per inch
@@ -793,7 +910,7 @@ void RodsHook::exportSomeRods(const char*filename, int firstRod, int numRods)
         Green, Lime, Magenta, Orange, Purple, Red, Silver, White, Yellow };
 
     Color clist[] = {Color::Blue, Color::Red, Color::Yellow, Color::Lime, Color::Orange, Color::Purple, Color::Cyan, Color::Black};
-    char clist_char[] = {'b', 'r', 'y', 'g', 'o', 'p', 'c', 'B'};
+    char clist_char[] = {'b', 'r', 'G', 'g', 'o', 'p', 'c', 'B'};
     int colorlen = 7;
 
     int maxlen = 0;
@@ -1331,7 +1448,14 @@ void RodsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     }
     viewer.selected_data_index = 0;
     viewer.data().set_mesh(renderQ, renderF);
-        viewer.data().show_lines = false; // urg, fix the toggle 
+    if( !showRodMesh )
+    {
+        viewer.data().show_lines = false; 
+    }
+    else
+    {
+        viewer.data().show_lines = true; 
+    }
 
     int faces = renderF.rows();
     faceColors.resize(faces, 4);

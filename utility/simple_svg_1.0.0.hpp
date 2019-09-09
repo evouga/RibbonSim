@@ -208,7 +208,7 @@ namespace svg
                 case Red: assign(255, 0, 0); break;
                 case Silver: assign(192, 192, 192); break;
                 case White: assign(255, 255, 255); break;
-                case Yellow: assign(255, 255, 0); break;
+                case Yellow: assign(128, 128, 128); break;
                 default: transparent = true; break;
             }
         }

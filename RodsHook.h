@@ -89,7 +89,8 @@ private:
     void linearSubdivision();
     void trimLooseEnds();
     void exportSomeRods(const char*filename, int firstRod, int numRods);
-    void exportWeave();    
+    void exportWeave();  
+    void exportXShell();  
     void centerScene();
     void slideConstraints();
     void loadTargetMesh();
@@ -120,6 +121,7 @@ private:
     double rescaleFactor;
     SceneStats stats;
     bool showCoverColors;
+    bool showRodMesh;
 
     RodConfig *config;
 
