@@ -853,11 +853,13 @@ void RodsHook::exportXShell()
     std::vector<Eigen::Matrix3d> rotations;
     rotations.push_back( Eigen::MatrixXd::Identity(3,3) );
 
+    int iter = 1;
+
     for (int i = 0; i < config->numConstraints(); i++)
     {
         Constraint c = config->constraints[i];
-        collisions(c.rod1, c.seg1) = (1 + c.rod2) * c.assignment;
-        collisions(c.rod2, c.seg2) = (1 + c.rod1) * c.assignment * -1;
+        collisions(c.rod1, c.seg1) = (1 + c.rod2);
+        collisions(c.rod2, c.seg2) = (1 + c.rod1);
 
         if (c.rod1 == c.rod2)
         {
@@ -871,9 +873,10 @@ void RodsHook::exportXShell()
 
         Eigen::Vector3d pt1 = (1.0 - c.bary1)*p1 + c.bary1*p2;
 
-        collisions_bary(c.rod1, c.seg1) = i;
-        collisions_bary(c.rod2, c.seg2) = i;
+        collisions_bary(c.rod1, c.seg1) = iter;
+        collisions_bary(c.rod2, c.seg2) = iter;
         ofs << "v " << pt1.transpose() << std::endl;
+        iter++;
     }
 
     // Connect lines
@@ -887,9 +890,9 @@ void RodsHook::exportXShell()
             { 
                 if (firstIdx >= 0)
                 {
-                    ofs << "l " << firstIdx << " " << collisions_bary(i, j) << std::endl;
+                    ofs << "l " << firstIdx<< " " << collisions_bary(i, j) << std::endl;
                 }
-                firstIdx = j;
+                firstIdx = collisions_bary(i, j);
             }
         }
     }
